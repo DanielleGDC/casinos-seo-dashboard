@@ -82,6 +82,7 @@ var CH={};
 var ROOT=document.getElementById('root');
 var STAR='<svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg>';
 var API_URL=window.location.hostname==='localhost'||window.location.protocol==='file:'?'https://api.anthropic.com/v1/messages':'/.netlify/functions/claude';
+var N8N_WEBHOOK_URL='https://gdcgroup.app.n8n.cloud/webhook-test/casinos-seo-data';
 
 function $(i){return document.getElementById(i);}
 function fmt(n){n=+n||0;return n>=1e6?(n/1e6).toFixed(1).replace(/\.0$/,'')+'M':n>=1e3?(n/1e3).toFixed(1).replace(/\.0$/,'')+'K':String(Math.round(n));}
@@ -126,6 +127,46 @@ function mergeGSC(a,b){if(!a)return b;function mA(x,y){var m={};x.forEach(functi
 function mergeGA4(a,b){if(!a)return b;var m={};a.rows.forEach(function(r){m[r.page]=Object.assign({},r);});b.rows.forEach(function(r){if(m[r.page]){var e=m[r.page];e.views+=r.views;e.users+=r.users;e.keyEvents+=r.keyEvents;e.engTime=(e.engTime+r.engTime)/2;e.viewsPrev+=r.viewsPrev;e.keyEventsPrev+=r.keyEventsPrev;}else m[r.page]=Object.assign({},r);});return{type:'ga4',market:a.market,ds:a.ds,de:a.de,dsPrev:a.dsPrev,dePrev:a.dePrev,hasComparison:a.hasComparison||b.hasComparison,rows:Object.values(m)};}
 async function doZip(file){var z=new JSZip(),L=await z.loadAsync(file);async function rd(n){var f=L.file(n);return f?await f.async('string'):'';}var fT=await rd('Filters.csv'),pT=await rd('Pages.csv'),qT=await rd('Queries.csv');var fil={};fT.split(/\r?\n/).forEach(function(l){var i=l.indexOf(',');if(i>-1)fil[l.slice(0,i).trim()]=l.slice(i+1).trim();});var sp=(fil['Page']||'').replace(/^\+/,'');var pages=parseGSCRows(pT,'Top pages'),queries=parseGSCRows(qT,'Top queries');return{type:'gsc',market:sp.indexOf('/ca')>=0?'CA':'US',site:sp.split('/').slice(0,3).join('/')||file.name,dateRange:fil['Date']||'Last period',ds:fil['Start date']||'',de:fil['End date']||'',hasComparison:pages.length>0&&pages[0].pc>0,pages:pages,queries:queries};}
 async function doCSV(file){return parseGA4CSV(await file.text());}
+
+
+/* LIVE DATA via n8n */
+function loadLiveData(market){
+  var btn=$(market==='US'?'liveUsBtn':'liveCaBtn');
+  var statusEl=$('liveStatus');
+  if(btn)btn.disabled=true;
+  if(statusEl)statusEl.innerHTML='<span style="color:#888">Fetching live data from GSC &amp; GA4...</span>';
+  if(!N8N_WEBHOOK_URL||N8N_WEBHOOK_URL==='YOUR_N8N_WEBHOOK_URL_HERE'){
+    if(statusEl)statusEl.innerHTML='<span style="color:#E05C3A">&#9888; Paste your n8n webhook URL into index.html first (search for https://gdcgroup.app.n8n.cloud/webhook-test/casinos-seo-data)</span>';
+    if(btn)btn.disabled=false;return;
+  }
+  var today=new Date();
+  var fmt=function(d){return d.toISOString().split('T')[0];};
+  var end=fmt(today);
+  var start=fmt(new Date(today.getTime()-28*86400000));
+  var pEnd=fmt(new Date(today.getTime()-29*86400000));
+  var pStart=fmt(new Date(today.getTime()-56*86400000));
+  var site=market==='CA'?'https://www.casinos.com/ca/':'https://www.casinos.com/';
+  fetch(N8N_WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({site:site,startDate:start,endDate:end,prevStartDate:pStart,prevEndDate:pEnd,market:market})})
+  .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+  .then(function(d){
+    if(d.gsc){S.gsc=d.gsc;}
+    if(d.ga4){S.ga4=d.ga4;}
+    S.files=[{name:'Live data ('+market+') '+start+' to '+end,type:'LIVE',status:'ok',info:start+' \u2013 '+end+' + comparison'}];
+    S.ta=null;
+    var pages=d.gsc?d.gsc.pages.length:0;
+    var queries=d.gsc?d.gsc.queries.length:0;
+    if(statusEl)statusEl.innerHTML='<span style="color:#27AE60">&#10003; Loaded '+pages+' pages, '+queries+' queries ('+start+' vs previous 28 days)</span>';
+    if(btn)btn.disabled=false;
+    var ab=$('analyseBtn');if(ab)ab.style.display='block';
+    renderUpload();
+  })
+  .catch(function(e){
+    if(statusEl)statusEl.innerHTML='<span style="color:#E05C3A">&#9888; Error: '+esc(e.message)+'. Check your n8n webhook URL and that the workflow is active.</span>';
+    if(btn)btn.disabled=false;
+  });
+}
+window.loadLiveData=loadLiveData;
 
 /* FILE HANDLING */
 function addFiles(files){var arr=Array.from(files);arr.forEach(function(f){if(f.name.match(/\.(zip|csv)$/i))S.files.push({name:f.name,type:f.name.match(/\.zip$/i)?'GSC':'GA4',status:'loading',file:f,info:''});});renderUpload();arr.forEach(function(f){var rec=S.files.find(function(r){return r.name===f.name&&r.status==='loading';});if(!rec)return;(async function(){try{if(f.name.match(/\.zip$/i)){var g=await doZip(f);S.gsc=mergeGSC(S.gsc,g);rec.info=(g.ds?drange(g.ds,g.de):g.dateRange)+(g.hasComparison?' + comparison':'');}else{var a=await doCSV(f);S.ga4=mergeGA4(S.ga4,a);rec.info=(a.ds?drange(a.ds,a.de):'GA4')+(a.hasComparison?' + comparison':'');}rec.status='ok';}catch(e){rec.status='error';console.error(e);}renderUpload();})();});}
@@ -272,7 +313,17 @@ function showTA(){
 /* UPLOAD */
 function renderUpload(){
   var hasLoaded=S.files.some(function(f){return f.status==='ok';});
-  ROOT.innerHTML='<div class="up"><div style="text-align:center;margin-bottom:24px"><div class="ulogo">'+STAR+'</div><div style="font-size:24px;font-weight:700;color:var(--t);margin-bottom:5px">SEO Dashboard</div><div style="font-size:13px;color:var(--tm)">casinos.com \u00b7 Upload your exports, then click Analyse</div></div>'
+  ROOT.innerHTML='<div class="up"><div style="text-align:center;margin-bottom:24px"><div class="ulogo">'+STAR+'</div><div style="font-size:24px;font-weight:700;color:var(--t);margin-bottom:5px">SEO Dashboard</div><div style="font-size:13px;color:var(--tm)">casinos.com \u00b7 Load live data instantly or upload exports</div></div>'
+    +'<div style="background:var(--bg2);border:1px solid #333;border-radius:11px;padding:16px 18px;margin-bottom:14px">'
+    +'<div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px">\u26a1 Live data \u2014 no uploads needed</div>'
+    +'<div style="font-size:10px;color:#666;margin-bottom:10px">Fetches directly from GSC &amp; GA4 via n8n. Last 28 days vs previous 28 days, comparison included automatically.</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+    +'<button id="liveUsBtn" onclick="loadLiveData('US')" style="background:var(--pink);color:#fff;border-color:var(--pink);font-weight:700;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load US live data</button>'
+    +'<button id="liveCaBtn" onclick="loadLiveData('CA')" style="background:var(--bg3);color:#ccc;border:1px solid #444;font-weight:600;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load CA live data</button>'
+    +'</div>'
+    +'<div id="liveStatus" style="font-size:11px;min-height:18px;margin-top:4px"></div>'
+    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="flex:1;height:1px;background:#222"></div><span style="font-size:10px;color:#444;white-space:nowrap">OR UPLOAD MANUALLY</span><div style="flex:1;height:1px;background:#222"></div></div>'
     +'<div class="dz" id="dz"><div style="font-size:13px;font-weight:600;color:var(--t);margin-bottom:4px">Drop GSC .zip or GA4 .csv files here</div><div style="font-size:11px;color:var(--tm)">Click to browse \u00b7 Multiple files \u00b7 Comparison exports auto-detected</div><input id="fu" type="file" multiple accept=".zip,.csv" style="display:none"></div>'
     +'<div id="flist">'+S.files.map(function(f,i){var isZ=f.type==='GSC';var sc=f.status==='ok'?'color:#27AE60':f.status==='error'?'color:#E05C3A':'color:#555';var st=f.status==='ok'?'\u2713 Loaded':f.status==='error'?'\u2715 Error':'Loading...';return'<div class="fi"><span class="ftag" style="'+(isZ?'color:#E91E8C;background:rgba(233,30,140,.12)':'color:#27AE60;background:rgba(39,174,96,.12)')+'">'+f.type+'</span><span class="fn" title="'+esc(f.name)+'">'+esc(f.name)+'</span>'+(f.info?'<span class="finfo" title="'+esc(f.info)+'">'+esc(f.info)+'</span>':'')+'<span class="fst" style="'+sc+'">'+st+'</span><button class="frm" data-idx="'+i+'">\u2715</button></div>';}).join('')+'</div>'
     +(hasLoaded?'<div class="analyse-bar"><div style="font-size:12px;color:#888;margin-bottom:10px">'+S.files.filter(function(f){return f.status==='ok';}).length+' file(s) ready'+(S.gsc&&S.gsc.hasComparison?' \u00b7 GSC comparison detected':'')+(S.ga4&&S.ga4.hasComparison?' \u00b7 GA4 comparison detected':'')+'</div><button class="bp" id="analyseBtn">Analyse data \u2192</button></div>':'')
