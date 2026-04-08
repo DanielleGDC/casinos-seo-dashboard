@@ -82,7 +82,7 @@ var CH={};
 var ROOT=document.getElementById('root');
 var STAR='<svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg>';
 var API_URL=window.location.hostname==='localhost'||window.location.protocol==='file:'?'https://api.anthropic.com/v1/messages':'/.netlify/functions/claude';
-var N8N_WEBHOOK_URL='https://gdcgroup.app.n8n.cloud/webhook-test/casinos-seo-data';
+var N8N_WEBHOOK_URL='https://gdcgroup.app.n8n.cloud/webhook/casinos-seo-data';
 
 function $(i){return document.getElementById(i);}
 function fmt(n){n=+n||0;return n>=1e6?(n/1e6).toFixed(1).replace(/\.0$/,'')+'M':n>=1e3?(n/1e3).toFixed(1).replace(/\.0$/,'')+'K':String(Math.round(n));}
@@ -136,7 +136,7 @@ function loadLiveData(market){
   if(btn)btn.disabled=true;
   if(statusEl)statusEl.innerHTML='<span style="color:#888">Fetching live data from GSC &amp; GA4...</span>';
   if(!N8N_WEBHOOK_URL||N8N_WEBHOOK_URL==='YOUR_N8N_WEBHOOK_URL_HERE'){
-    if(statusEl)statusEl.innerHTML='<span style="color:#E05C3A">&#9888; Paste your n8n webhook URL into index.html first (search for https://gdcgroup.app.n8n.cloud/webhook-test/casinos-seo-data)</span>';
+    if(statusEl)statusEl.innerHTML='<span style="color:#E05C3A">&#9888; Paste your n8n webhook URL into index.html first (search for https://gdcgroup.app.n8n.cloud/webhook/casinos-seo-data)</span>';
     if(btn)btn.disabled=false;return;
   }
   var today=new Date();
