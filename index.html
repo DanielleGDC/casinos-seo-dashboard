@@ -318,8 +318,8 @@ function renderUpload(){
     +'<div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px">\u26a1 Live data \u2014 no uploads needed</div>'
     +'<div style="font-size:10px;color:#666;margin-bottom:10px">Fetches directly from GSC &amp; GA4 via n8n. Last 28 days vs previous 28 days, comparison included automatically.</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
-    +'<button id="liveUsBtn" onclick="loadLiveData('US')" style="background:var(--pink);color:#fff;border-color:var(--pink);font-weight:700;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load US live data</button>'
-    +'<button id="liveCaBtn" onclick="loadLiveData('CA')" style="background:var(--bg3);color:#ccc;border:1px solid #444;font-weight:600;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load CA live data</button>'
+    +'<button id="liveUsBtn" data-market="US" style="background:var(--pink);color:#fff;border-color:var(--pink);font-weight:700;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load US live data</button>'
+    +'<button id="liveCaBtn" data-market="CA" style="background:var(--bg3);color:#ccc;border:1px solid #444;font-weight:600;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load CA live data</button>'
     +'</div>'
     +'<div id="liveStatus" style="font-size:11px;min-height:18px;margin-top:4px"></div>'
     +'</div>'
@@ -329,6 +329,9 @@ function renderUpload(){
     +(hasLoaded?'<div class="analyse-bar"><div style="font-size:12px;color:#888;margin-bottom:10px">'+S.files.filter(function(f){return f.status==='ok';}).length+' file(s) ready'+(S.gsc&&S.gsc.hasComparison?' \u00b7 GSC comparison detected':'')+(S.ga4&&S.ga4.hasComparison?' \u00b7 GA4 comparison detected':'')+'</div><button class="bp" id="analyseBtn">Analyse data \u2192</button></div>':'')
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px"><div style="background:rgba(233,30,140,.05);border:1px solid rgba(233,30,140,.15);border-radius:8px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#E91E8C;margin-bottom:6px">GSC zip export</div><div style="font-size:10px;color:#666;line-height:1.6">Search Console \u2192 Performance \u2192 set dates \u2192 enable comparison period \u2192 Export.</div></div><div style="background:rgba(39,174,96,.05);border:1px solid rgba(39,174,96,.15);border-radius:8px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#27AE60;margin-bottom:6px">GA4 CSV export</div><div style="font-size:10px;color:#666;line-height:1.6">GA4 \u2192 Reports \u2192 Pages &amp; screens \u2192 add comparison period \u2192 Export CSV.</div></div></div></div>';
   var dz=$('dz'),fu=$('fu'),ab=$('analyseBtn');
+  var lusBtn=$('liveUsBtn'),lcaBtn=$('liveCaBtn');
+  if(lusBtn)lusBtn.onclick=function(){loadLiveData('US');};
+  if(lcaBtn)lcaBtn.onclick=function(){loadLiveData('CA');};
   if(dz){dz.onclick=function(e){if(e.target!==fu)fu.click();};dz.ondragover=function(e){e.preventDefault();dz.classList.add('drag');};dz.ondragleave=function(){dz.classList.remove('drag');};dz.ondrop=function(e){e.preventDefault();dz.classList.remove('drag');addFiles(e.dataTransfer.files);};}
   if(fu)fu.onchange=function(){addFiles(fu.files);};
   if(ab)ab.onclick=function(){S.tab='overview';render();};
