@@ -86,7 +86,7 @@ var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null};
 var CH={};
 var ROOT=document.getElementById('root');
 var STAR='<svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg>';
-var API_URL=window.location.hostname==='localhost'||window.location.protocol==='file:'?'https://api.anthropic.com/v1/messages':'/.netlify/functions/claude';
+var API_URL=window.location.hostname.includes('netlify')? '/.netlify/functions/claude':'https://api.anthropic.com/v1/messages';
 var N8N_WEBHOOK_URL='https://gdcgroup.app.n8n.cloud/webhook/casinos-seo-data';
 
 function $(i){return document.getElementById(i);}
