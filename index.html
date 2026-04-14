@@ -285,7 +285,15 @@ function barChart(id,labels,datasets){setTimeout(function(){var el=$(id);if(!el)
 
 /* OVERVIEW */
 function tabOverview(){
-  var g=S.gsc,a=S.ga4;var lc=0,pc=0,li=0,pi=0;if(g){g.pages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});}
+  var g=S.gsc,a=S.ga4;
+  var mktKey=S.market||'all';
+  var filteredPages=g?g.pages.filter(function(p){return matchMarket(p.key,mktKey);}):[];
+  var filteredGA4=a?a.rows.filter(function(r){return matchMarket(r.page,mktKey);}):[];
+  var lc=0,pc=0,li=0,pi=0;
+  filteredPages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});
+  if(!filteredPages.length&&!filteredGA4.length){
+    $('tc').innerHTML='<div class="empty" style="padding:40px">No data found for this market. Try a different market filter or load fresh data.</div>';return;
+  }
   var m=filteredGA4.filter(function(r){return r.pageType==='Money Page';});var totV=0,totKE=0,totVP=0,totKEP=0;m.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
   var cd=parseFloat(pct(lc,pc)),id2=parseFloat(pct(li,pi)),vDiff=parseFloat(pct(totV,totVP)),kDiff=parseFloat(pct(totKE,totKEP));
   var hasCmp=g&&g.hasComparison,hasCmpG=a&&a.hasComparison;
@@ -324,8 +332,6 @@ function rPos(){
   var pages=g.pages.filter(function(p){
     if(!matchMarket(p.key,mktKey2))return false;
     if(v.q&&p.key.toLowerCase().indexOf(v.q)<0)return false;
-    if(v.ty==='us'&&p.key.toLowerCase().indexOf('/us/')<0)return false;
-    if(v.ty==='ca'&&p.key.toLowerCase().indexOf('/ca/')<0)return false;
     return true;
   });
   pages=filterPT(pages,v.pt);
@@ -372,8 +378,6 @@ function rGA4(){
     if(!matchMarket(r.page,mktKey3))return false;
     if(v.q&&r.page.toLowerCase().indexOf(v.q)<0)return false;
     if(v.ty==='money'&&r.pageType!=='Money Page')return false;
-    if(v.ty==='us'&&r.page.toLowerCase().indexOf('/us/')<0)return false;
-    if(v.ty==='ca'&&r.page.toLowerCase().indexOf('/ca/')<0)return false;
     if(v.pt!=='all'&&getPageType(r.page)!==v.pt)return false;
     return true;
   });
