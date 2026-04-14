@@ -28,6 +28,8 @@ button:hover{border-color:var(--pink);color:var(--pink)}
 .dp{background:var(--bg2);border:1px solid #333;border-radius:20px;padding:3px 10px;font-size:10px;color:var(--tm);white-space:nowrap;display:flex;align-items:center;gap:5px}
 .dd{width:6px;height:6px;border-radius:50%;background:var(--pink);flex-shrink:0}
 .cmp-pill{background:rgba(255,255,255,.07);border:1px solid #444;border-radius:20px;padding:2px 8px;font-size:9px;color:#aaa;font-weight:600;white-space:nowrap}
+.mkt-select{height:28px;border:1px solid var(--pinkb);border-radius:20px;padding:0 24px 0 10px;background:rgba(233,30,140,.1);color:var(--pink);font-size:11px;font-weight:700;font-family:inherit;outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23E91E8C'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.mkt-select:hover{background-color:rgba(233,30,140,.2)}
 .tabnav{background:var(--bg4);border-bottom:1px solid #222;display:flex;padding:0 16px;position:sticky;top:50px;z-index:99;overflow-x:auto}
 .tabnav::-webkit-scrollbar{height:0}
 .tb{padding:9px 13px;font-size:12px;cursor:pointer;background:transparent;border:none;color:var(--tm);border-bottom:2px solid transparent;white-space:nowrap;transition:.15s}
@@ -82,7 +84,41 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <body>
 <div id="root"></div>
 <script>
-var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null};
+var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market:'all'};
+
+// Market definitions — path prefix for each geo
+var MARKETS={
+  all:   {label:'All markets',       prefix:null},
+  global:{label:'🌍 Global / GX',    prefix:null, noPrefix:true},
+  us:    {label:'🇺🇸 United States', prefix:'/us/'},
+  ca:    {label:'🇨🇦 Canada',        prefix:'/ca/'},
+  uk:    {label:'🇬🇧 United Kingdom',prefix:'/uk/'},
+  ie:    {label:'🇮🇪 Ireland',       prefix:'/ie/'},
+  it:    {label:'🇮🇹 Italy',         prefix:'/it/'},
+  nz:    {label:'🇳🇿 New Zealand',   prefix:'/nz/'},
+  row:   {label:'🌐 Rest of World',  prefix:null, noPrefix:true}
+};
+var KNOWN_PREFIXES=['/us/','/ca/','/uk/','/ie/','/it/','/nz/'];
+
+// GA4 property IDs per market — used when fetching live data
+var GA4_PROPS={
+  all:'340682665', global:'340682665', us:'340682665',
+  ca:'395120251', ie:'395169855', nz:'395143837',
+  it:'417387159', uk:'395132493', row:'395176605'
+};
+
+function matchMarket(url, marketKey){
+  if(!url) return false;
+  var m=MARKETS[marketKey];
+  if(!m) return true;
+  if(marketKey==='all') return true;
+  if(marketKey==='global'){
+    // Global = pages that don't start with any known geo prefix
+    var s=url.toLowerCase();
+    return !KNOWN_PREFIXES.some(function(p){return s.indexOf(p)>=0;});
+  }
+  return url.toLowerCase().indexOf(m.prefix)>=0;
+}
 var CH={};
 var ROOT=document.getElementById('root');
 var STAR='<svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg>';
@@ -174,7 +210,8 @@ async function doCSV(file){return parseGA4CSV(await file.text());}
 
 /* LIVE DATA via n8n */
 function loadLiveData(market){
-  var btn=$(market==='US'?'liveUsBtn':'liveCaBtn');
+  market=market||S.market||'all';
+  var btn=$('liveLoadBtn');
   var statusEl=$('liveStatus');
   if(btn)btn.disabled=true;
   if(statusEl)statusEl.innerHTML='<span style="color:#888">Fetching live data from GSC &amp; GA4...</span>';
@@ -188,9 +225,8 @@ function loadLiveData(market){
   var start=fmt(new Date(today.getTime()-28*86400000));
   var pEnd=fmt(new Date(today.getTime()-29*86400000));
   var pStart=fmt(new Date(today.getTime()-56*86400000));
-  var site=market==='CA'?'https://www.casinos.com/ca/':'https://www.casinos.com/';
   fetch(N8N_WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({site:site,startDate:start,endDate:end,prevStartDate:pStart,prevEndDate:pEnd,market:market})})
+    body:JSON.stringify({site:'https://www.casinos.com/',market:market.toLowerCase(),startDate:start,endDate:end,prevStartDate:pStart,prevEndDate:pEnd})})
   .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
   .then(function(d){
     if(d.gsc){S.gsc=d.gsc;}
@@ -199,7 +235,7 @@ function loadLiveData(market){
     S.ta=null;
     var pages=d.gsc?d.gsc.pages.length:0;
     var queries=d.gsc?d.gsc.queries.length:0;
-    if(statusEl)statusEl.innerHTML='<span style="color:#27AE60">&#10003; Loaded '+pages+' pages, '+queries+' queries ('+start+' vs previous 28 days)</span>';
+    if(statusEl)statusEl.innerHTML='<span style="color:#27AE60">&#10003; Loaded '+pages+' pages, '+queries+' queries ('+start+' vs previous 28 days) — use the market filter in the dashboard to filter by geo</span>';
     if(btn)btn.disabled=false;
     var ab=$('analyseBtn');if(ab)ab.style.display='block';
     renderUpload();
@@ -216,7 +252,12 @@ function addFiles(files){var arr=Array.from(files);arr.forEach(function(f){if(f.
 window.removeFile=function(i){S.files.splice(i,1);S.gsc=null;S.ga4=null;var rem=S.files.filter(function(f){return f.status==='ok';});S.files.forEach(function(r){r.status='loading';r.info='';});renderUpload();rem.forEach(function(rec){(async function(){try{if(rec.type==='GSC'){var g=await doZip(rec.file);S.gsc=mergeGSC(S.gsc,g);rec.info=(g.ds?drange(g.ds,g.de):g.dateRange)+(g.hasComparison?' + comparison':'');}else{var a=await doCSV(rec.file);S.ga4=mergeGA4(S.ga4,a);rec.info=(a.ds?drange(a.ds,a.de):'GA4')+(a.hasComparison?' + comparison':'');}rec.status='ok';}catch(e){rec.status='error';}renderUpload();})();});};
 
 /* HELPERS */
-function dateBadge(){var g=S.gsc,a=S.ga4,p=[];if(g)p.push(g.ds?drange(g.ds,g.de):g.dateRange);if(a&&a.ds)p.push('GA4: '+drange(a.ds,a.de));return p.join(' \u00b7 ')||'No date';}
+function dateBadge(){
+  var g=S.gsc,a=S.ga4,p=[];
+  if(g)p.push(g.ds?drange(g.ds,g.de):g.dateRange);
+  if(a&&a.ds)p.push('GA4: '+drange(a.ds,a.de));
+  return p.join(' \u00b7 ')||'No date';
+}
 function mkMC(label,val,sub,subCol,dt){return'<div class="mc"><div class="lb">'+esc(label)+'</div><div class="vl">'+esc(val)+'</div>'+(sub?'<div class="sb" style="color:'+(subCol||'#555')+'">'+esc(sub)+'</div>':'')+(dt?'<div class="dt">'+esc(dt)+'</div>':'')+'</div>';}
 function mkTbl(cols,rows,empty){if(!rows.length)return'<div class="empty">'+(empty||'No data')+'</div>';var h='<div class="tbl"><table><thead><tr>'+cols.map(function(c){return'<th'+(c.r?' class="r"':'')+'>'+c.l+'</th>';}).join('')+'</tr></thead><tbody>';rows.forEach(function(row){h+='<tr>'+row.map(function(cell,j){var v=cell&&cell.l!==undefined?cell.l:cell,st='';if(cell&&cell.c)st+='color:'+cell.c+';';if(cell&&cell.b)st+='font-weight:700;';if(cell&&cell.html)return'<td '+(cols[j]&&cols[j].r?'class="r"':'')+'>'+v+'</td>';var cls=cols[j]&&cols[j].r?'r':cols[j]&&cols[j].mono?'mono':'';return'<td'+(cls?' class="'+cls+'"':'')+' style="'+st+'" title="'+esc(v)+'">'+esc(v)+'</td>';}).join('')+'</tr>';});return h+'</tbody></table></div>';}
 function mkFbar(pfx,ph,types,sorts,extra){var h='<div class="fb"><input id="'+pfx+'q" placeholder="'+ph+'" style="flex:1;min-width:120px">';if(types)h+='<select id="'+pfx+'ty">'+types.map(function(t){return'<option value="'+t.v+'">'+t.l+'</option>';}).join('')+'</select>';if(sorts)h+='<select id="'+pfx+'so">'+sorts.map(function(s){return'<option value="'+s.v+'">'+s.l+'</option>';}).join('')+'</select>';if(extra)h+=extra;h+='<span id="'+pfx+'cnt" class="cnt"></span></div>';return h;}
@@ -245,13 +286,13 @@ function barChart(id,labels,datasets){setTimeout(function(){var el=$(id);if(!el)
 /* OVERVIEW */
 function tabOverview(){
   var g=S.gsc,a=S.ga4;var lc=0,pc=0,li=0,pi=0;if(g){g.pages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});}
-  var m=a?a.rows.filter(function(r){return r.pageType==='Money Page';}):[];var totV=0,totKE=0,totVP=0,totKEP=0;m.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
+  var m=filteredGA4.filter(function(r){return r.pageType==='Money Page';});var totV=0,totKE=0,totVP=0,totKEP=0;m.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
   var cd=parseFloat(pct(lc,pc)),id2=parseFloat(pct(li,pi)),vDiff=parseFloat(pct(totV,totVP)),kDiff=parseFloat(pct(totKE,totKEP));
   var hasCmp=g&&g.hasComparison,hasCmpG=a&&a.hasComparison;
-  var gn=g?g.pages.filter(function(p){return p.lp>0&&p.pp>0&&p.pp>p.lp;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,7):[];
-  var dc2=g?g.pages.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,7):[];
+  var gn=filteredPages.filter(function(p){return p.lp>0&&p.pp>0&&p.pp>p.lp;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,7);
+  var dc2=filteredPages.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,7);
   var topKE=m.slice().sort(function(a,b){return b.keyEvents-a.keyEvents;}).slice(0,8);
-  var pd=g?gn.concat(dc2).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,14):[];
+  var pd=gn.concat(dc2).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,14);
   var cH=pd.length?Math.max(320,pd.length*40+80):0;
   var html='<div class="g4">'+mkMC('Clicks',fmt(lc),hasCmp?(cd>=0?'\u2191 ':'\u2193 ')+Math.abs(cd)+'% vs prev period':'Export with comparison to see delta',hasCmp?(cd>=0?'#27AE60':'#E05C3A'):'#555',g&&g.ds?drange(g.ds,g.de):g?g.dateRange:'')+mkMC('Impressions',fmt(li),hasCmp?(id2>=0?'\u2191 ':'\u2193 ')+Math.abs(id2)+'% vs prev period':'',hasCmp?(id2>=0?'#27AE60':'#E05C3A'):'#555')+mkMC('GA4 views',totV>0?fmt(totV):'\u2014',hasCmpG&&totVP>0?(vDiff>=0?'\u2191 ':'\u2193 ')+Math.abs(vDiff)+'% vs prev':'Money pages',hasCmpG&&totVP>0?(vDiff>=0?'#27AE60':'#E05C3A'):'#888',a&&a.ds?drange(a.ds,a.de):'')+mkMC('Key events',totKE>0?fmt(totKE):'\u2014',hasCmpG&&totKEP>0?(kDiff>=0?'\u2191 ':'\u2193 ')+Math.abs(kDiff)+'% vs prev':'Exit clicks & goals',hasCmpG&&totKEP>0?(kDiff>=0?'#27AE60':'#E05C3A'):'#888')+'</div>';
   if(pd.length)html+='<div class="card"><div class="sec">Position movement \u2014 '+esc(g.ds?drange(g.ds,g.de):g.dateRange)+(hasCmp?' (vs previous period)':'')+'</div>'+LEGEND+'<div style="height:'+cH+'px"><canvas id="cOv"></canvas></div></div>';
@@ -279,7 +320,14 @@ function tabPositions(){
 }
 function rPos(){
   var g=S.gsc;if(!g)return;var v=fbarVals('p_'),hasCmp=g.hasComparison;
-  var pages=g.pages.filter(function(p){if(v.q&&p.key.toLowerCase().indexOf(v.q)<0)return false;if(v.ty==='us'&&p.key.toLowerCase().indexOf('/us/')<0)return false;if(v.ty==='ca'&&p.key.toLowerCase().indexOf('/ca/')<0)return false;return true;});
+  var mktKey2=S.market||'all';
+  var pages=g.pages.filter(function(p){
+    if(!matchMarket(p.key,mktKey2))return false;
+    if(v.q&&p.key.toLowerCase().indexOf(v.q)<0)return false;
+    if(v.ty==='us'&&p.key.toLowerCase().indexOf('/us/')<0)return false;
+    if(v.ty==='ca'&&p.key.toLowerCase().indexOf('/ca/')<0)return false;
+    return true;
+  });
   pages=filterPT(pages,v.pt);
   pages.sort(function(a,b){return v.so==='gain'?(b.pp-b.lp)-(a.pp-a.lp):v.so==='loss'?(a.pp-a.lp)-(b.pp-b.lp):v.so==='clicks'?b.lc-a.lc:v.so==='impr'?b.li-a.li:a.lp-b.lp;});
   var cnt=$('p_cnt');if(cnt)cnt.textContent=pages.length+' pages';
@@ -319,7 +367,16 @@ function tabGA4(){
 }
 function rGA4(){
   var a=S.ga4;if(!a)return;var v=fbarVals('g_'),hasCmp=a.hasComparison;
-  var src=a.rows.filter(function(r){if(v.q&&r.page.toLowerCase().indexOf(v.q)<0)return false;if(v.ty==='money'&&r.pageType!=='Money Page')return false;if(v.ty==='us'&&r.page.toLowerCase().indexOf('/us/')<0)return false;if(v.ty==='ca'&&r.page.toLowerCase().indexOf('/ca/')<0)return false;if(v.pt!=='all'&&getPageType(r.page)!==v.pt)return false;return true;});
+  var mktKey3=S.market||'all';
+  var src=a.rows.filter(function(r){
+    if(!matchMarket(r.page,mktKey3))return false;
+    if(v.q&&r.page.toLowerCase().indexOf(v.q)<0)return false;
+    if(v.ty==='money'&&r.pageType!=='Money Page')return false;
+    if(v.ty==='us'&&r.page.toLowerCase().indexOf('/us/')<0)return false;
+    if(v.ty==='ca'&&r.page.toLowerCase().indexOf('/ca/')<0)return false;
+    if(v.pt!=='all'&&getPageType(r.page)!==v.pt)return false;
+    return true;
+  });
   var so=v.so;src.sort(function(a,b){if(so==='ke')return b.keyEvents-a.keyEvents;if(so==='conv'){var ca=a.views>0?a.keyEvents/a.views:0,cb=b.views>0?b.keyEvents/b.views:0;return cb-ca;}if(so==='lowconv'){var ca2=a.views>0?a.keyEvents/a.views:1,cb2=b.views>0?b.keyEvents/b.views:1;return ca2-cb2;}if(so==='eng')return b.engTime-a.engTime;return b.views-a.views;});
   var totV=0,totKE=0,totVP=0,totKEP=0;src.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
   var cnt=$('g_cnt');if(cnt)cnt.textContent=src.length+' pages';var vd=parseFloat(pct(totV,totVP)),kd=parseFloat(pct(totKE,totKEP));
@@ -340,7 +397,11 @@ function rGA4(){
 /* KEYWORDS */
 function tabKeywords(){
   if(!S.gsc){$('tc').innerHTML='<div class="empty">Upload a GSC zip to see keyword data</div>';return;}
-  var g=S.gsc,v=S.kw,dr=g.ds?drange(g.ds,g.de):g.dateRange,qs=g.queries;
+  var g=S.gsc,v=S.kw,dr=g.ds?drange(g.ds,g.de):g.dateRange;
+  var mktKey4=S.market||'all';
+  // For keywords we filter by looking at which pages rank for queries in the selected market
+  // Since queries don't have URLs, we show all queries but note the market filter
+  var qs=g.queries;
   var sets={top:qs.slice().sort(function(a,b){return b.li-a.li;}).slice(0,40),gainers:qs.filter(function(q){return q.lc>q.pc&&q.lc>=2;}).sort(function(a,b){return(b.lc-b.pc)-(a.lc-a.pc);}).slice(0,30),losers:qs.filter(function(q){return q.pc>q.lc&&q.pc>=3;}).sort(function(a,b){return(a.lc-a.pc)-(b.lc-b.pc);}).slice(0,30),opps:qs.filter(function(q){return q.li>200&&q.lp>10&&q.lp<35&&q.lc<q.li*0.02;}).sort(function(a,b){return b.li-a.li;}).slice(0,30),p1:qs.filter(function(q){return q.lp>0&&q.lp<=10;}).sort(function(a,b){return a.lp-b.lp;}).slice(0,30)};
   var tabs={top:'Top impressions',gainers:'Click gainers',losers:'Click losers',opps:'Opportunities',p1:'Page 1'};
   $('tc').innerHTML='<div style="font-size:10px;color:#555;margin-bottom:8px">Period: '+esc(dr)+(g.hasComparison?' \u00b7 vs previous period':'')+'</div>'+'<div class="kwt">'+Object.keys(tabs).map(function(k){return'<button class="'+(v===k?'ba':'')+'" data-kw="'+k+'">'+tabs[k]+' <span style="opacity:.4;font-size:10px">('+sets[k].length+')</span></button>';}).join('')+'</div>'+(v==='opps'?'<div class="note" style="background:rgba(233,30,140,.06);border-color:#E91E8C;color:#E91E8C">Queries ranking positions 10\u201335 with high impressions and low CTR.</div>':'')+(v==='p1'?'<div class="note" style="background:rgba(39,174,96,.06);border-color:#27AE60;color:#27AE60">Already on page 1. Improve CTR with better title tags and meta descriptions.</div>':'')+'<div id="kwTbl"></div>';
@@ -385,9 +446,9 @@ function renderUpload(){
     +'<div style="background:var(--bg2);border:1px solid #333;border-radius:11px;padding:16px 18px;margin-bottom:14px">'
     +'<div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px">\u26a1 Live data \u2014 no uploads needed</div>'
     +'<div style="font-size:10px;color:#666;margin-bottom:10px">Fetches directly from GSC &amp; GA4 via n8n. Last 28 days vs previous 28 days, comparison included automatically.</div>'
-    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
-    +'<button id="liveUsBtn" data-market="US" style="background:var(--pink);color:#fff;border-color:var(--pink);font-weight:700;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load US live data</button>'
-    +'<button id="liveCaBtn" data-market="CA" style="background:var(--bg3);color:#ccc;border:1px solid #444;font-weight:600;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load CA live data</button>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
+    +'<button id="liveLoadBtn" style="background:var(--pink);color:#fff;border-color:var(--pink);font-weight:700;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load live data</button>'
+    +'<span style="font-size:11px;color:#555">then filter by market in the dashboard</span>'
     +'</div>'
     +'<div id="liveStatus" style="font-size:11px;min-height:18px;margin-top:4px"></div>'
     +'</div>'
@@ -397,9 +458,8 @@ function renderUpload(){
     +(hasLoaded?'<div class="analyse-bar"><div style="font-size:12px;color:#888;margin-bottom:10px">'+S.files.filter(function(f){return f.status==='ok';}).length+' file(s) ready'+(S.gsc&&S.gsc.hasComparison?' \u00b7 GSC comparison detected':'')+(S.ga4&&S.ga4.hasComparison?' \u00b7 GA4 comparison detected':'')+'</div><button class="bp" id="analyseBtn">Analyse data \u2192</button></div>':'')
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px"><div style="background:rgba(233,30,140,.05);border:1px solid rgba(233,30,140,.15);border-radius:8px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#E91E8C;margin-bottom:6px">GSC zip export</div><div style="font-size:10px;color:#666;line-height:1.6">Search Console \u2192 Performance \u2192 set dates \u2192 enable comparison period \u2192 Export.</div></div><div style="background:rgba(39,174,96,.05);border:1px solid rgba(39,174,96,.15);border-radius:8px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#27AE60;margin-bottom:6px">GA4 CSV export</div><div style="font-size:10px;color:#666;line-height:1.6">GA4 \u2192 Reports \u2192 Pages &amp; screens \u2192 add comparison period \u2192 Export CSV.</div></div></div></div>';
   var dz=$('dz'),fu=$('fu'),ab=$('analyseBtn');
-  var lusBtn=$('liveUsBtn'),lcaBtn=$('liveCaBtn');
-  if(lusBtn)lusBtn.onclick=function(){loadLiveData('US');};
-  if(lcaBtn)lcaBtn.onclick=function(){loadLiveData('CA');};
+  var liveBtn=$('liveLoadBtn');
+  if(liveBtn)liveBtn.onclick=function(){loadLiveData('ALL');};
   if(dz){dz.onclick=function(e){if(e.target!==fu)fu.click();};dz.ondragover=function(e){e.preventDefault();dz.classList.add('drag');};dz.ondragleave=function(){dz.classList.remove('drag');};dz.ondrop=function(e){e.preventDefault();dz.classList.remove('drag');addFiles(e.dataTransfer.files);};}
   if(fu)fu.onchange=function(){addFiles(fu.files);};
   if(ab)ab.onclick=function(){S.tab='overview';render();};
@@ -691,7 +751,31 @@ function render(){
     +(S.gsc||S.ga4?'<button class="pdf-btn" id="pdfBtn" onclick="downloadPDF()"><svg viewBox="0 0 16 16" style="width:13px;height:13px;fill:currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zm-5 2h10v1.5H3V14z"/></svg>Download PDF</button>':'')
     +'<button id="backBtn" style="font-size:11px;margin-left:6px">\u27f5 Upload files</button></div>'+'<div class="tabnav">'+TABS.map(function(t){return'<button class="tb'+(S.tab===t.id?' on':'')+'" data-tab="'+t.id+'">'+t.l+'</button>';}).join('')+'</div>'+'<div class="main" id="tc"></div>';
   document.querySelectorAll('[data-tab]').forEach(function(btn){btn.onclick=function(){S.tab=btn.getAttribute('data-tab');render();};});
-  var bb=$('backBtn');if(bb)bb.onclick=function(){S.gsc=null;S.ga4=null;S.files=[];S.ta=null;renderUpload();};
+  var bb=$('backBtn');if(bb)bb.onclick=function(){S.gsc=null;S.ga4=null;S.files=[];S.ta=null;S.market='all';renderUpload();};
+  var ms=$('mktSelect');if(ms)ms.onchange=function(){
+    var newMkt=ms.value;
+    S.market=newMkt;S.ta=null;
+    // If data was loaded live, reload GA4 for the new market's property
+    var isLive=S.files.length>0&&S.files[0].type==='LIVE';
+    if(isLive&&N8N_WEBHOOK_URL&&N8N_WEBHOOK_URL!=='YOUR_N8N_WEBHOOK_URL_HERE'){
+      var statusEl=$('liveStatus');
+      render(); // render first with GSC filtered
+      // Then reload GA4 for this market
+      var today=new Date();
+      var fmt2=function(d){return d.toISOString().split('T')[0];};
+      var end2=fmt2(today),start2=fmt2(new Date(today.getTime()-28*86400000));
+      var pEnd2=fmt2(new Date(today.getTime()-29*86400000)),pStart2=fmt2(new Date(today.getTime()-56*86400000));
+      fetch(N8N_WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({site:'https://www.casinos.com/',market:newMkt.toLowerCase(),startDate:start2,endDate:end2,prevStartDate:pStart2,prevEndDate:pEnd2})})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d.ga4){S.ga4=d.ga4;}
+        render();
+      }).catch(function(){});
+    } else {
+      render();
+    }
+  };
   doTab();
 }
 function doTab(){if(S.tab==='overview')tabOverview();else if(S.tab==='positions')tabPositions();else if(S.tab==='ga4')tabGA4();else if(S.tab==='keywords')tabKeywords();else if(S.tab==='takeaways')tabTakeaways();}
