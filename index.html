@@ -84,7 +84,8 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <body>
 <div id="root"></div>
 <script>
-var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market:'all'};
+var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market:'all',dateRange:'28d',
+  customStart:'',customEnd:'',customPrevStart:'',customPrevEnd:''};
 
 // Market definitions — path prefix for each geo
 var MARKETS={
@@ -100,6 +101,42 @@ var MARKETS={
 };
 var KNOWN_PREFIXES=['/us/','/ca/','/uk/','/ie/','/it/','/nz/'];
 
+// Date range presets
+var DATE_RANGES={
+  '7d':   {label:'Last 7 days',        days:7},
+  '28d':  {label:'Last 28 days',       days:28},
+  '90d':  {label:'Last 90 days',       days:90},
+  '6m':   {label:'Last 6 months',      days:180},
+  '12m':  {label:'Last 12 months',     days:365},
+  'mtd':  {label:'Month to date',      days:0, mtd:true},
+  'custom':{label:'Custom range …', days:28, custom:true}
+};
+
+function getDates(rangeKey){
+  var today=new Date();
+  var fmt=function(d){return d.toISOString().split('T')[0];};
+  var r=DATE_RANGES[rangeKey]||DATE_RANGES['28d'];
+  // Custom dates
+  if(rangeKey==='custom'&&S.customStart&&S.customEnd){
+    return{startDate:S.customStart,endDate:S.customEnd,
+           prevStartDate:S.customPrevStart||'',prevEndDate:S.customPrevEnd||''};
+  }
+  // Month to date
+  if(r.mtd){
+    var end=fmt(today);
+    var start=fmt(new Date(today.getFullYear(),today.getMonth(),1));
+    var prevMonthEnd=fmt(new Date(today.getFullYear(),today.getMonth(),0));
+    var prevMonthStart=fmt(new Date(today.getFullYear(),today.getMonth()-1,1));
+    return{startDate:start,endDate:end,prevStartDate:prevMonthStart,prevEndDate:prevMonthEnd};
+  }
+  var days=r.days;
+  var end=fmt(today);
+  var start=fmt(new Date(today.getTime()-days*86400000));
+  var pEnd=fmt(new Date(today.getTime()-(days+1)*86400000));
+  var pStart=fmt(new Date(today.getTime()-(days*2+1)*86400000));
+  return{startDate:start,endDate:end,prevStartDate:pStart,prevEndDate:pEnd};
+}
+
 // GA4 property IDs per market — used when fetching live data
 var GA4_PROPS={
   all:'340682665', global:'340682665', us:'340682665',
@@ -112,11 +149,12 @@ function matchMarket(url, marketKey){
   var m=MARKETS[marketKey];
   if(!m) return true;
   if(marketKey==='all') return true;
-  if(marketKey==='global'){
-    // Global = pages that don't start with any known geo prefix
+  // Global and Row = pages with no known geo prefix
+  if(m.noPrefix){
     var s=url.toLowerCase();
     return !KNOWN_PREFIXES.some(function(p){return s.indexOf(p)>=0;});
   }
+  if(!m.prefix) return true;
   return url.toLowerCase().indexOf(m.prefix)>=0;
 }
 var CH={};
@@ -219,12 +257,8 @@ function loadLiveData(market){
     if(statusEl)statusEl.innerHTML='<span style="color:#E05C3A">&#9888; Paste your n8n webhook URL into index.html first (search for https://gdcgroup.app.n8n.cloud/webhook/casinos-seo-data)</span>';
     if(btn)btn.disabled=false;return;
   }
-  var today=new Date();
-  var fmt=function(d){return d.toISOString().split('T')[0];};
-  var end=fmt(today);
-  var start=fmt(new Date(today.getTime()-28*86400000));
-  var pEnd=fmt(new Date(today.getTime()-29*86400000));
-  var pStart=fmt(new Date(today.getTime()-56*86400000));
+  var dates=getDates(S.dateRange||'28d');
+  var start=dates.startDate,end=dates.endDate,pStart=dates.prevStartDate,pEnd=dates.prevEndDate;
   fetch(N8N_WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({site:'https://www.casinos.com/',market:market.toLowerCase(),startDate:start,endDate:end,prevStartDate:pStart,prevEndDate:pEnd})})
   .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
@@ -288,7 +322,13 @@ function tabOverview(){
   var g=S.gsc,a=S.ga4;
   var mktKey=S.market||'all';
   var filteredPages=g?g.pages.filter(function(p){return matchMarket(p.key,mktKey);}):[];
-  var filteredGA4=a?a.rows.filter(function(r){return matchMarket(r.page,mktKey);}):[];
+  // Geo-specific = markets with their own GA4 property (not global/us/all)
+  var geoSpecificMkts2=['ca','uk','ie','it','nz','row'];
+  var isGeoMkt=geoSpecificMkts2.indexOf(mktKey)>=0;
+  var filteredGA4=a?a.rows.filter(function(r){
+    if(isGeoMkt)return true; // own GA4 property, all rows are already this market
+    return matchMarket(r.page,mktKey); // global property, filter by path
+  }):[];
   var lc=0,pc=0,li=0,pi=0;
   filteredPages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});
   if(!filteredPages.length&&!filteredGA4.length){
@@ -374,8 +414,13 @@ function tabGA4(){
 function rGA4(){
   var a=S.ga4;if(!a)return;var v=fbarVals('g_'),hasCmp=a.hasComparison;
   var mktKey3=S.market||'all';
+  // Only apply path prefix filter when using the global property (all/us/global)
+  // Geo-specific properties already contain only that market's data
+  var geoProps=['ca','uk','ie','it','nz','row'];
+  var isGeoSpecific=geoProps.indexOf(mktKey3)>=0;
   var src=a.rows.filter(function(r){
-    if(!matchMarket(r.page,mktKey3))return false;
+    // Skip prefix filter for geo-specific properties — all rows are already that market
+    if(!isGeoSpecific&&!matchMarket(r.page,mktKey3))return false;
     if(v.q&&r.page.toLowerCase().indexOf(v.q)<0)return false;
     if(v.ty==='money'&&r.pageType!=='Money Page')return false;
     if(v.pt!=='all'&&getPageType(r.page)!==v.pt)return false;
@@ -403,8 +448,8 @@ function tabKeywords(){
   if(!S.gsc){$('tc').innerHTML='<div class="empty">Upload a GSC zip to see keyword data</div>';return;}
   var g=S.gsc,v=S.kw,dr=g.ds?drange(g.ds,g.de):g.dateRange;
   var mktKey4=S.market||'all';
-  // For keywords we filter by looking at which pages rank for queries in the selected market
-  // Since queries don't have URLs, we show all queries but note the market filter
+  // Keywords/queries don't have market path info in GSC — always show full query set
+  // GSC queries are site-wide regardless of market
   var qs=g.queries;
   var sets={top:qs.slice().sort(function(a,b){return b.li-a.li;}).slice(0,40),gainers:qs.filter(function(q){return q.lc>q.pc&&q.lc>=2;}).sort(function(a,b){return(b.lc-b.pc)-(a.lc-a.pc);}).slice(0,30),losers:qs.filter(function(q){return q.pc>q.lc&&q.pc>=3;}).sort(function(a,b){return(a.lc-a.pc)-(b.lc-b.pc);}).slice(0,30),opps:qs.filter(function(q){return q.li>200&&q.lp>10&&q.lp<35&&q.lc<q.li*0.02;}).sort(function(a,b){return b.li-a.li;}).slice(0,30),p1:qs.filter(function(q){return q.lp>0&&q.lp<=10;}).sort(function(a,b){return a.lp-b.lp;}).slice(0,30)};
   var tabs={top:'Top impressions',gainers:'Click gainers',losers:'Click losers',opps:'Opportunities',p1:'Page 1'};
@@ -449,7 +494,29 @@ function renderUpload(){
   ROOT.innerHTML='<div class="up"><div style="text-align:center;margin-bottom:24px"><div class="ulogo">'+STAR+'</div><div style="font-size:24px;font-weight:700;color:var(--t);margin-bottom:5px">SEO Dashboard</div><div style="font-size:13px;color:var(--tm)">casinos.com \u00b7 Load live data instantly or upload exports</div></div>'
     +'<div style="background:var(--bg2);border:1px solid #333;border-radius:11px;padding:16px 18px;margin-bottom:14px">'
     +'<div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px">\u26a1 Live data \u2014 no uploads needed</div>'
-    +'<div style="font-size:10px;color:#666;margin-bottom:10px">Fetches directly from GSC &amp; GA4 via n8n. Last 28 days vs previous 28 days, comparison included automatically.</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">'
+    +'<span style="font-size:10px;color:#666">Date range:</span>'
+    +'<select id="dateRangeSel" style="height:24px;border:1px solid #444;border-radius:6px;background:var(--bg3);color:#ccc;font-size:10px;padding:0 6px;font-family:inherit">'
+    +Object.keys(DATE_RANGES).map(function(k){return'<option value="'+k+'"'+(S.dateRange===k?' selected':'')+'>'+DATE_RANGES[k].label+'</option>';}).join('')
+    +'</select>'
+    +'<span style="font-size:10px;color:#555" id="rangeHint">vs previous equal period</span>'
+    +'</div>'
+    // Custom date picker rows — shown only when custom selected
+    +'<div id="customDates" style="display:'+(S.dateRange==='custom'?'flex':'none')+';flex-direction:column;gap:6px;background:var(--bg3);border:1px solid #333;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<span style="font-size:10px;color:#888;width:90px">Current period</span>'
+    +'<input type="date" id="cStart" value="'+(S.customStart||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#F0F0F0;font-size:10px;padding:0 6px;font-family:inherit">'
+    +'<span style="font-size:10px;color:#555">to</span>'
+    +'<input type="date" id="cEnd" value="'+(S.customEnd||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#F0F0F0;font-size:10px;padding:0 6px;font-family:inherit">'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<span style="font-size:10px;color:#555;width:90px">Compare to</span>'
+    +'<input type="date" id="cPrevStart" value="'+(S.customPrevStart||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#888;font-size:10px;padding:0 6px;font-family:inherit">'
+    +'<span style="font-size:10px;color:#555">to</span>'
+    +'<input type="date" id="cPrevEnd" value="'+(S.customPrevEnd||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#888;font-size:10px;padding:0 6px;font-family:inherit">'
+    +'<span style="font-size:10px;color:#555">(optional)</span>'
+    +'</div>'
+    +'</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
     +'<button id="liveLoadBtn" style="background:var(--pink);color:#fff;border-color:var(--pink);font-weight:700;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load live data</button>'
     +'<span style="font-size:11px;color:#555">then filter by market in the dashboard</span>'
@@ -464,6 +531,22 @@ function renderUpload(){
   var dz=$('dz'),fu=$('fu'),ab=$('analyseBtn');
   var liveBtn=$('liveLoadBtn');
   if(liveBtn)liveBtn.onclick=function(){loadLiveData('ALL');};
+  var drSel=$('dateRangeSel');
+  if(drSel)drSel.onchange=function(){
+    S.dateRange=drSel.value;
+    var cd=$('customDates');
+    var hint=$('rangeHint');
+    if(cd)cd.style.display=S.dateRange==='custom'?'flex':'none';
+    if(hint)hint.textContent=S.dateRange==='custom'?'specify periods below':'vs previous equal period';
+  };
+  // Bind custom date inputs
+  function bindDateInput(id,field){
+    var el=$(id);if(el)el.onchange=function(){S[field]=el.value;};
+  }
+  bindDateInput('cStart','customStart');
+  bindDateInput('cEnd','customEnd');
+  bindDateInput('cPrevStart','customPrevStart');
+  bindDateInput('cPrevEnd','customPrevEnd');
   if(dz){dz.onclick=function(e){if(e.target!==fu)fu.click();};dz.ondragover=function(e){e.preventDefault();dz.classList.add('drag');};dz.ondragleave=function(){dz.classList.remove('drag');};dz.ondrop=function(e){e.preventDefault();dz.classList.remove('drag');addFiles(e.dataTransfer.files);};}
   if(fu)fu.onchange=function(){addFiles(fu.files);};
   if(ab)ab.onclick=function(){S.tab='overview';render();};
@@ -753,10 +836,32 @@ function render(){
   var TABS=[{id:'overview',l:'Overview'},{id:'positions',l:'Positions'},{id:'ga4',l:'GA4'},{id:'keywords',l:'Keywords'},{id:'takeaways',l:'AI Takeaways'}];
   ROOT.innerHTML='<div class="topbar"><div class="lm">'+STAR+'</div><div><div class="ln">casinos.com</div><span class="ls">SEO Dashboard</span></div>'+((S.gsc||S.ga4)?'<div class="dp"><span class="dd"></span>'+esc(dateBadge())+'</div>':'')+(S.gsc&&S.gsc.hasComparison?'<span class="cmp-pill">GSC comparison</span>':'')+(S.ga4&&S.ga4.hasComparison?'<span class="cmp-pill">GA4 comparison</span>':'')+'<div style="flex:1"></div>'
     +(S.gsc||S.ga4?'<button class="pdf-btn" id="pdfBtn" onclick="downloadPDF()"><svg viewBox="0 0 16 16" style="width:13px;height:13px;fill:currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zm-5 2h10v1.5H3V14z"/></svg>Download PDF</button>':'')
+    +((S.gsc||S.ga4)?'<select style="height:26px;border:1px solid #333;border-radius:6px;background:var(--bg3);color:#888;font-size:10px;padding:0 6px;margin-right:6px;font-family:inherit" id="topDateSel">'+Object.keys(DATE_RANGES).map(function(k){return'<option value="'+k+'"'+(S.dateRange===k?' selected':'')+'>'+DATE_RANGES[k].label+'</option>';}).join('')+'</select>':'')
+    +(S.dateRange==='custom'&&(S.gsc||S.ga4)?'<div style="display:flex;gap:4px;align-items:center;margin-right:6px;background:rgba(255,255,255,.04);border:1px solid #333;border-radius:8px;padding:3px 8px">'
+    +'<input type="date" id="tbCStart" value="'+(S.customStart||'')+'" style="height:22px;border:none;background:transparent;color:#F0F0F0;font-size:10px;padding:0;font-family:inherit;width:100px">'
+    +'<span style="font-size:9px;color:#444">vs</span>'
+    +'<input type="date" id="tbCPrevStart" value="'+(S.customPrevStart||'')+'" style="height:22px;border:none;background:transparent;color:#666;font-size:10px;padding:0;font-family:inherit;width:100px">'
+    +'<button id="tbGoBtn" style="background:var(--pink);color:#fff;border:none;border-radius:5px;padding:2px 8px;font-size:9px;cursor:pointer;font-weight:700">Go</button>'
+    +'</div>':'')
     +((S.gsc||S.ga4)?'<select class="mkt-select" id="mktSelect" style="margin-right:6px">'+Object.keys(MARKETS).map(function(k){return'<option value="'+k+'"'+(S.market===k?' selected':'')+'>'+MARKETS[k].label+'</option>';}).join('')+'</select>':'')
     +'<button id="backBtn" style="font-size:11px;margin-left:6px">\u27f5 Upload files</button></div>'+'<div class="tabnav">'+TABS.map(function(t){return'<button class="tb'+(S.tab===t.id?' on':'')+'" data-tab="'+t.id+'">'+t.l+'</button>';}).join('')+'</div>'+'<div class="main" id="tc"></div>';
   document.querySelectorAll('[data-tab]').forEach(function(btn){btn.onclick=function(){S.tab=btn.getAttribute('data-tab');render();};});
   var bb=$('backBtn');if(bb)bb.onclick=function(){S.gsc=null;S.ga4=null;S.files=[];S.ta=null;S.market='all';renderUpload();};
+  var tds=$('topDateSel');
+  if(tds)tds.onchange=function(){
+    S.dateRange=tds.value;
+    var isLive2=S.files.length>0&&S.files[0].type==='LIVE';
+    if(S.dateRange!=='custom'&&isLive2&&N8N_WEBHOOK_URL&&N8N_WEBHOOK_URL!=='YOUR_N8N_WEBHOOK_URL_HERE'){
+      loadLiveData(S.market||'all');
+    } else {
+      render(); // re-render to show/hide custom inputs
+    }
+  };
+  // Topbar custom date inputs
+  var tbCS=$('tbCStart'),tbCPS=$('tbCPrevStart'),tbGo=$('tbGoBtn');
+  if(tbCS)tbCS.onchange=function(){S.customStart=tbCS.value;};
+  if(tbCPS)tbCPS.onchange=function(){S.customPrevStart=tbCPS.value;};
+  if(tbGo)tbGo.onclick=function(){loadLiveData(S.market||'all');};
   var ms=$('mktSelect');if(ms)ms.onchange=function(){
     var newMkt=ms.value;
     S.market=newMkt;S.ta=null;
@@ -766,12 +871,9 @@ function render(){
       var statusEl=$('liveStatus');
       render(); // render first with GSC filtered
       // Then reload GA4 for this market
-      var today=new Date();
-      var fmt2=function(d){return d.toISOString().split('T')[0];};
-      var end2=fmt2(today),start2=fmt2(new Date(today.getTime()-28*86400000));
-      var pEnd2=fmt2(new Date(today.getTime()-29*86400000)),pStart2=fmt2(new Date(today.getTime()-56*86400000));
+      var dates2=getDates(S.dateRange||'28d');
       fetch(N8N_WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({site:'https://www.casinos.com/',market:newMkt.toLowerCase(),startDate:start2,endDate:end2,prevStartDate:pStart2,prevEndDate:pEnd2})})
+        body:JSON.stringify({site:'https://www.casinos.com/',market:newMkt.toLowerCase(),startDate:dates2.startDate,endDate:dates2.endDate,prevStartDate:dates2.prevStartDate,prevEndDate:dates2.prevEndDate})})
       .then(function(r){return r.json();})
       .then(function(d){
         if(d.ga4){S.ga4=d.ga4;}
