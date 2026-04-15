@@ -330,9 +330,11 @@ function tabOverview(){
   var geoSpecificMkts2=['ca','uk','ie','it','nz','row'];
   var isGeoMkt=geoSpecificMkts2.indexOf(mktKey)>=0;
   if(a)a.rows.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'';});
+  // For US/all/global: global GA4 property - show all rows, don't path-filter
   var filteredGA4=a?a.rows.filter(function(r){
-    if(isGeoMkt)return true; // own GA4 property, all rows are already this market
-    return matchMarket(r.page,mktKey); // global property, filter by path
+    if(isGeoMkt)return true; // own GA4 property, all rows already this market
+    if(mktKey==='us'||mktKey==='all'||mktKey==='global')return true; // global property
+    return matchMarket(r.page,mktKey); // other markets via global property
   }):[];
   var lc=0,pc=0,li=0,pi=0;
   filteredPages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});
@@ -371,7 +373,11 @@ function tabPositions(){
   var ptSel=PT_SEL.replace('id="PFXPT"','id="p_pt"');
   $('tc').innerHTML='<div class="card"><div class="sec">Position movement \u2014 '+esc(dr)+(g.hasComparison?' <span style="background:#222;border:1px solid #333;border-radius:10px;padding:1px 7px;font-size:9px;color:#888">comparison included</span>':'')+'</div>'+LEGEND+'<div style="height:'+Math.max(320,cd.length*40+80)+'px"><canvas id="cPF"></canvas></div></div>'
     +mkFbar('p_','Filter by page path...',[{v:'all',l:'All pages'}],[{v:'gain',l:'Best gainers'},{v:'loss',l:'Biggest declines'},{v:'clicks',l:'Most clicks'},{v:'impr',l:'Most impressions'},{v:'pos',l:'Best position'}],ptSel)+'<div id="pTbl"></div>';
-  bindFbar('p_',rPos);rPos();posChart('cPF',g.pages,18);
+  bindFbar('p_',rPos);rPos();
+  // Build filtered pages for chart using current market
+  var mktKeyChart=S.market||'all';
+  var chartPages=g.pages.filter(function(p){return matchMarket(p.key,mktKeyChart);});
+  posChart('cPF',chartPages,18);
 }
 function rPos(){
   var g=S.gsc;if(!g)return;var v=fbarVals('p_'),hasCmp=g.hasComparison;
@@ -389,6 +395,15 @@ function rPos(){
   cols.push({l:'Clicks',r:true},{l:'Prev cl.',r:true},{l:'Impressions',r:true},{l:'CTR',r:true});
   var rows=pages.slice(0,200).map(function(p){var d=p.pp>0&&p.lp>0?p.pp-p.lp:null;var pt=getPageType(p.key);var row=[{l:ptBadge(pt),html:true},slug(p.key)];if(hasCmp)row.push({l:p.pp>0?p.pp.toFixed(1):'\u2014',c:'#555'},{l:p.lp>0?p.lp.toFixed(1):'\u2014'},{l:d!=null?(d>0?'+':'')+d.toFixed(1):'\u2014',c:dcol(d||0),b:true});else row.push({l:p.lp>0?p.lp.toFixed(1):'\u2014'});row.push({l:fmt(p.lc),c:p.lc>p.pc?'#27AE60':null},{l:fmt(p.pc),c:'#555'},{l:fmt(p.li)},{l:p.lctr,c:'#555'});return row;});
   var t=$('pTbl');if(t)t.innerHTML=mkTbl(cols,rows,'No pages match filters');
+  // Redraw chart with filtered pages
+  if(pages.length){
+    var mktKeyR=S.market||'all';
+    var chartPages2=g.pages.filter(function(p){return matchMarket(p.key,mktKeyR);});
+    var gnR=chartPages2.filter(function(p){return p.lp>0&&p.pp>0&&p.pp>p.lp;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,9);
+    var dcR=chartPages2.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,9);
+    var pdR=gnR.concat(dcR).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);});
+    if($('cPF')&&pdR.length)posChart('cPF',pdR,18);
+  }
 }
 
 /* GA4 */
@@ -425,12 +440,15 @@ function rGA4(){
   // Geo-specific properties already contain only that market's data
   var geoProps=['ca','uk','ie','it','nz','row'];
   var isGeoSpecific=geoProps.indexOf(mktKey3)>=0;
+  // For US/all/global: show all rows (global property has all pages)
+  // For geo-specific (CA/UK/IE/IT/NZ/ROW): show all rows (own property)
+  // Only path-filter for other markets coming through the global property
+  var skipPath=isGeoSpecific||(mktKey3==='all')||(mktKey3==='global')||(mktKey3==='us');
   var src=a.rows.filter(function(r){
-    // Skip prefix filter for geo-specific properties — all rows are already that market
-    if(!isGeoSpecific&&!matchMarket(r.page,mktKey3))return false;
+    if(!skipPath&&!matchMarket(r.page,mktKey3))return false;
     if(v.q&&r.page.toLowerCase().indexOf(v.q)<0)return false;
-    if(v.ty==='money'&&r.pageType!=='Money Page')return false;
-    if(v.pt!=='all'&&getPageType(r.page)!==v.pt)return false;
+    if(v.ty==='money'&&r.pageType!=='bofu'&&r.pageType!=='casino'&&r.pageType!=='state'&&r.pageType!=='Money Page')return false;
+    if(v.pt!=='all'&&r.pageType!==v.pt)return false;
     return true;
   });
   var so=v.so;src.sort(function(a,b){if(so==='ke')return b.keyEvents-a.keyEvents;if(so==='conv'){var ca=a.views>0?a.keyEvents/a.views:0,cb=b.views>0?b.keyEvents/b.views:0;return cb-ca;}if(so==='lowconv'){var ca2=a.views>0?a.keyEvents/a.views:1,cb2=b.views>0?b.keyEvents/b.views:1;return ca2-cb2;}if(so==='eng')return b.engTime-a.engTime;return b.views-a.views;});
@@ -876,19 +894,20 @@ function render(){
     var isLive=S.files.length>0&&S.files[0].type==='LIVE';
     if(isLive&&N8N_WEBHOOK_URL&&N8N_WEBHOOK_URL!=='YOUR_N8N_WEBHOOK_URL_HERE'){
       var statusEl=$('liveStatus');
-      render(); // render first with GSC filtered
-      // Then reload GA4 for this market
+      // Reload BOTH GSC and GA4 for the new market
       var dates2=getDates(S.dateRange||'28d');
+      var statusEl=$('liveStatus');
       fetch(N8N_WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({site:'https://www.casinos.com/',market:newMkt.toLowerCase(),startDate:dates2.startDate,endDate:dates2.endDate,prevStartDate:dates2.prevStartDate,prevEndDate:dates2.prevEndDate})})
       .then(function(r){return r.json();})
       .then(function(d){
+        if(d.gsc){S.gsc=d.gsc;}
         if(d.ga4){
-          d.ga4.rows.forEach(function(r){r.pageType=getPageType(r.page)||'';});
+          d.ga4.rows.forEach(function(r){r.pageType=getPageType(r.page)||'other';});
           S.ga4=d.ga4;
         }
         render();
-      }).catch(function(){});
+      }).catch(function(){render();});
     } else {
       render();
     }
