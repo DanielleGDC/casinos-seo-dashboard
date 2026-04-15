@@ -485,7 +485,7 @@ function tabKeywords(){
     top:qs.slice().sort(function(a,b){return b.li-a.li;}).slice(0,40),
     gainers:qs.filter(function(q){return q.lc>q.pc&&q.lc>=2;}).sort(function(a,b){return(b.lc-b.pc)-(a.lc-a.pc);}).slice(0,40),
     losers:qs.filter(function(q){return q.lc<q.pc&&q.pc>=2;}).sort(function(a,b){return(a.lc-a.pc)-(b.lc-b.pc);}).slice(0,40),
-    opps:qs.filter(function(q){return q.li>200&&q.lp>10&&q.lp<35&&q.lc<q.li*0.02;}).sort(function(a,b){return b.li-a.li;}).slice(0,40),
+    opps:qs.filter(function(q){return q.li>100&&q.lp>10&&q.lp<=20&&q.lctr&&parseFloat(q.lctr)<3;}).sort(function(a,b){return b.li-a.li;}).slice(0,40),
     page1:qs.filter(function(q){return q.lp>=1&&q.lp<=10;}).sort(function(a,b){return a.lp-b.lp;}).slice(0,40)
   };
   var cur=sets[v]||sets.top;
@@ -779,7 +779,7 @@ async function downloadPDF(){
     y+=6;
 
     // Opportunities
-    var opps=g.queries.filter(function(q){return q.li>200&&q.lp>10&&q.lp<35&&q.lc<q.li*0.02;}).sort(function(a,b){return b.li-a.li;}).slice(0,20);
+    var opps=g.queries.filter(function(q){return q.li>100&&q.lp>10&&q.lp<=20&&q.lctr&&parseFloat(q.lctr)<3;}).sort(function(a,b){return b.li-a.li;}).slice(0,20);
     if(opps.length){
       cp(20);secHead('KEYWORD OPPORTUNITIES (pos 10\u201335, high impressions, low CTR)');
       doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');
