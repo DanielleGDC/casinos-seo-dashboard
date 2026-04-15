@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Casinos.com — SEO Dashboard</title>
+<title>Casinos.com — SEO Dashboard v2.1</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -859,7 +859,7 @@ window.downloadPDF=downloadPDF;
 function render(){
   if(!S.gsc&&!S.ga4){renderUpload();return;}
   var TABS=[{id:'overview',l:'Overview'},{id:'positions',l:'Positions'},{id:'ga4',l:'GA4'},{id:'keywords',l:'Keywords'},{id:'takeaways',l:'AI Takeaways'}];
-  ROOT.innerHTML='<div class="topbar"><div class="lm">'+STAR+'</div><div><div class="ln">casinos.com</div><span class="ls">SEO Dashboard</span></div>'+((S.gsc||S.ga4)?'<div class="dp"><span class="dd"></span>'+esc(dateBadge())+'</div>':'')+(S.gsc&&S.gsc.hasComparison?'<span class="cmp-pill">GSC comparison</span>':'')+(S.ga4&&S.ga4.hasComparison?'<span class="cmp-pill">GA4 comparison</span>':'')+'<div style="flex:1"></div>'
+  ROOT.innerHTML='<div class="topbar"><div class="lm">'+STAR+'</div><div><div class="ln">casinos.com</div><span class="ls">SEO Dashboard <span style="font-size:9px;color:#444;font-weight:400">v2.1</span></span></div>'+((S.gsc||S.ga4)?'<div class="dp"><span class="dd"></span>'+esc(dateBadge())+'</div>':'')+(S.gsc&&S.gsc.hasComparison?'<span class="cmp-pill">GSC comparison</span>':'')+(S.ga4&&S.ga4.hasComparison?'<span class="cmp-pill">GA4 comparison</span>':'')+'<div style="flex:1"></div>'
     +(S.gsc||S.ga4?'<button class="pdf-btn" id="pdfBtn" onclick="downloadPDF()"><svg viewBox="0 0 16 16" style="width:13px;height:13px;fill:currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zm-5 2h10v1.5H3V14z"/></svg>Download PDF</button>':'')
     +((S.gsc||S.ga4)?'<select style="height:26px;border:1px solid #333;border-radius:6px;background:var(--bg3);color:#888;font-size:10px;padding:0 6px;margin-right:6px;font-family:inherit" id="topDateSel">'+Object.keys(DATE_RANGES).map(function(k){return'<option value="'+k+'"'+(S.dateRange===k?' selected':'')+'>'+DATE_RANGES[k].label+'</option>';}).join('')+'</select>':'')
     +(S.dateRange==='custom'&&(S.gsc||S.ga4)?'<div style="display:flex;gap:4px;align-items:center;margin-right:6px;background:rgba(255,255,255,.04);border:1px solid #333;border-radius:8px;padding:3px 8px">'
