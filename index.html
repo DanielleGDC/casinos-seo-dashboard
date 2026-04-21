@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Casinos.com — SEO Dashboard v2.2</title>
+<title>Casinos.com — SEO Dashboard v2.3</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -41,12 +41,13 @@ button:hover{border-color:var(--pink);color:var(--pink)}
 .mc{background:var(--bg3);border:1px solid #2a2a2a;border-radius:11px;padding:13px 15px}
 .mc .lb{font-size:10px;color:var(--tm);margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em}
 .mc .vl{font-size:21px;font-weight:700}.mc .sb{font-size:10px;margin-top:4px}.mc .dt{font-size:9px;color:var(--td);margin-top:2px}
-.tbl{border:1px solid #222;border-radius:11px;overflow:hidden;max-height:500px;overflow-y:auto}
+.tbl{border:1px solid #222;border-radius:11px;overflow:hidden;max-height:600px;overflow-y:auto}
 table{width:100%;border-collapse:collapse;font-size:11px}thead{position:sticky;top:0;z-index:2}
 th{padding:8px 10px;background:#111;color:#aaa;font-size:9px;font-weight:700;text-align:left;white-space:nowrap;border-bottom:1px solid #2a2a2a;text-transform:uppercase;letter-spacing:.05em}
 th.r,td.r{text-align:right}
-td{padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+td{padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
 td.mono{font-family:monospace;font-size:10px;color:var(--tm)}
+td.url-cell{max-width:260px;overflow:hidden;text-overflow:ellipsis}
 tr:hover td{background:rgba(255,255,255,.03)}
 .pr{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
 .pr .pg{flex:1;font-family:monospace;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tm)}
@@ -58,6 +59,15 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .chart-legend{display:flex;gap:16px;font-size:10px;color:var(--tm);margin-bottom:8px;flex-wrap:wrap}
 .legend-item{display:flex;align-items:center;gap:5px}.legend-swatch{width:24px;height:8px;border-radius:2px;flex-shrink:0}
 .pt-badge{display:inline-block;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;vertical-align:middle;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.url-btn{background:transparent;border:none;color:#888;cursor:pointer;font-family:monospace;font-size:10px;text-align:left;padding:0;text-decoration:underline;text-decoration-color:rgba(136,136,136,.4);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;transition:.1s}
+.url-btn:hover{color:var(--pink);text-decoration-color:var(--pink)}
+.url-btn.active{color:var(--pink);text-decoration-color:var(--pink)}
+.kw-url-filter{display:flex;align-items:center;gap:6px;background:rgba(233,30,140,.08);border:1px solid rgba(233,30,140,.25);border-radius:8px;padding:5px 10px;margin-bottom:10px}
+.kw-url-filter span{font-size:10px;color:#888}
+.kw-url-filter code{font-size:10px;color:var(--pink);font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kw-url-filter button{background:transparent;border:none;color:#555;font-size:14px;cursor:pointer;padding:0 2px;line-height:1}
+.kw-url-filter button:hover{color:var(--red)}
+.exit-clicks-highlight{background:rgba(233,30,140,.08);border:1px solid rgba(233,30,140,.2);border-radius:7px;padding:2px 7px}
 .up{max-width:600px;margin:0 auto;padding:40px 20px}
 .ulogo{width:64px;height:64px;background:var(--pink);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
 .ulogo svg{width:34px;height:34px}
@@ -81,7 +91,8 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <div id="root"></div>
 <script>
 var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market:'all',dateRange:'28d',
-  customStart:'',customEnd:'',customPrevStart:'',customPrevEnd:'',reportMd:null};
+  customStart:'',customEnd:'',customPrevStart:'',customPrevEnd:'',reportMd:null,
+  kwSearch:'',kwActiveUrl:null};
 var MARKETS={
   all:   {label:'All markets',       prefix:null},
   global:{label:'\uD83C\uDF0D Global / GX',    prefix:null, noPrefix:true},
@@ -224,10 +235,12 @@ function barChart(id,labels,datasets){setTimeout(function(){var el=$(id);if(!el)
 function tabOverview(){
   var g=S.gsc,a=S.ga4,mktKey=S.market||'all';
   var filteredPages=g?g.pages.filter(function(p){return matchMarket(p.key,mktKey);}):[];
-  var isGeoMkt=['ca','uk','ie','it','nz','row'].indexOf(mktKey)>=0;
   if(a)a.rows.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'';});
+  var geoMkts=['ca','uk','ie','it','nz','row'];
+  var isGeoMkt=geoMkts.indexOf(mktKey)>=0;
   var filteredGA4=a?a.rows.filter(function(r){
-    if(isGeoMkt)return true;if(mktKey==='us'||mktKey==='all'||mktKey==='global')return true;return matchMarket(r.page,mktKey);
+    if(isGeoMkt||mktKey==='all'||mktKey==='global')return true;
+    return matchMarket(r.page,mktKey);
   }):[];
   var lc=0,pc=0,li=0,pi=0;filteredPages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});
   if(!filteredPages.length&&!filteredGA4.length){$('tc').innerHTML='<div class="empty" style="padding:40px">No data for this market.</div>';return;}
@@ -241,7 +254,7 @@ function tabOverview(){
   var topKE=m.slice().sort(function(a,b){return b.keyEvents-a.keyEvents;}).slice(0,8);
   var pd=gn.concat(dc2).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,14);
   var cH=pd.length?Math.max(320,pd.length*40+80):0;
-  var html='<div class="g4">'+mkMC('Clicks [GSC]',fmt(lc),hasCmp?(cd>=0?'\u2191 ':'\u2193 ')+Math.abs(cd)+'% vs prev':'',hasCmp?(cd>=0?'#27AE60':'#E05C3A'):'#555',g&&g.ds?drange(g.ds,g.de):g?g.dateRange:'')+mkMC('Impressions [GSC]',fmt(li),hasCmp?(id2>=0?'\u2191 ':'\u2193 ')+Math.abs(id2)+'% vs prev':'',hasCmp?(id2>=0?'#27AE60':'#E05C3A'):'#555')+mkMC('GA4 Views [GA4]',totV>0?fmt(totV):'\u2014',hasCmpG&&totVP>0?(vDiff>=0?'\u2191 ':'\u2193 ')+Math.abs(vDiff)+'% vs prev':'Money pages',hasCmpG&&totVP>0?(vDiff>=0?'#27AE60':'#E05C3A'):'#888',a&&a.ds?drange(a.ds,a.de):'')+mkMC('Exit Clicks [GA4]',totKE>0?fmt(totKE):'\u2014',hasCmpG&&totKEP>0?(kDiff>=0?'\u2191 ':'\u2193 ')+Math.abs(kDiff)+'% vs prev':'exit_click_goal',hasCmpG&&totKEP>0?(kDiff>=0?'#27AE60':'#E05C3A'):'#888')+'</div>';
+  var html='<div class="g4">'+mkMC('Clicks [GSC]',fmt(lc),hasCmp?(cd>=0?'\u2191 ':'\u2193 ')+Math.abs(cd)+'% vs prev':'',hasCmp?(cd>=0?'#27AE60':'#E05C3A'):'#555',g&&g.ds?drange(g.ds,g.de):g?g.dateRange:'')+mkMC('Impressions [GSC]',fmt(li),hasCmp?(id2>=0?'\u2191 ':'\u2193 ')+Math.abs(id2)+'% vs prev':'',hasCmp?(id2>=0?'#27AE60':'#E05C3A'):'#555')+mkMC('GA4 Views',totV>0?fmt(totV):'\u2014',hasCmpG&&totVP>0?(vDiff>=0?'\u2191 ':'\u2193 ')+Math.abs(vDiff)+'% vs prev':'Money pages',hasCmpG&&totVP>0?(vDiff>=0?'#27AE60':'#E05C3A'):'#888',a&&a.ds?drange(a.ds,a.de):'')+mkMC('Exit Clicks [GA4]',totKE>0?fmt(totKE):'\u2014',hasCmpG&&totKEP>0?(kDiff>=0?'\u2191 ':'\u2193 ')+Math.abs(kDiff)+'% vs prev':'exit_click_goal',hasCmpG&&totKEP>0?(kDiff>=0?'#27AE60':'#E05C3A'):'#888')+'</div>';
   if(pd.length)html+='<div class="card"><div class="sec">Position movement [GSC] \u2014 '+(g.ds?drange(g.ds,g.de):g.dateRange)+(hasCmp?' vs prev':'')+'</div>'+LEGEND+'<div style="height:'+cH+'px"><canvas id="cOv"></canvas></div></div>';
   html+='<div class="g2"><div class="card"><div class="sec">Top position gainers [GSC]</div>';
   if(gn.length)gn.forEach(function(p){var d=p.pp-p.lp;html+='<div class="pr"><div class="pg" title="'+esc(slug(p.key))+'">'+esc(slug(p.key))+'</div><div class="vv">'+p.pp.toFixed(0)+'\u2192'+p.lp.toFixed(0)+'</div><div class="dv" style="color:#27AE60">+'+d.toFixed(1)+'</div></div>';});
@@ -281,70 +294,383 @@ function rPos(){
   var dcR=chartPages2.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,9);
   if($('cPF')&&(gnR.length||dcR.length))posChart('cPF',gnR.concat(dcR).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}),18);
 }
-/* GA4 — v2.2: geo-aware skipPath filter */
+/* ============================================================
+   GA4 TAB — v2.3 REWRITE
+   Fixed: geo filtering, exit click goals, full URL display,
+   accurate metrics, comparison display
+   ============================================================ */
+var GEO_MKTS=['ca','uk','ie','it','nz','row'];
+
+function getGA4FilteredRows(allRows, mktKey) {
+  // Geo-specific markets: live data already comes from that market's GA4 property,
+  // so skip path filtering (it would break since paths don't carry geo prefix)
+  if(GEO_MKTS.indexOf(mktKey) >= 0) return allRows;
+  // "all" or "global" — show everything
+  if(mktKey === 'all' || mktKey === 'global') return allRows;
+  // US market: include rows that match /us/ OR rows that have no known geo prefix
+  if(mktKey === 'us') {
+    return allRows.filter(function(r) {
+      var p = (r.page || '').toLowerCase();
+      return p.indexOf('/us/') >= 0 || !KNOWN_PREFIXES.some(function(pfx) { return p.indexOf(pfx) >= 0; });
+    });
+  }
+  // Any other market with a prefix
+  return allRows.filter(function(r) { return matchMarket(r.page, mktKey); });
+}
+
 function tabGA4(){
   if(!S.ga4){$('tc').innerHTML='<div class="empty">Upload a GA4 CSV to see traffic data</div>';return;}
-  var a=S.ga4,dr=a.ds?drange(a.ds,a.de):'',hasCmp=a.hasComparison,prevStr=hasCmp&&a.dsPrev?drange(a.dsPrev,a.dePrev):'';
-  var ptSel=PT_SEL.replace('id="PFXPT"','id="g_pt"');
-  var periodLegend='<div style="background:#1A1A1A;border:1px solid #2a2a2a;border-radius:11px;padding:10px 16px;margin-bottom:12px">'
-    +(hasCmp?'<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center"><div style="display:flex;align-items:center;gap:7px"><div style="width:20px;height:8px;background:#E91E8C;border-radius:2px"></div><div><div style="font-size:11px;font-weight:600;color:#F0F0F0">Current [GA4]</div><div style="font-size:10px;color:#888">'+esc(dr)+'</div></div></div>'+(prevStr?'<div style="display:flex;align-items:center;gap:7px"><div style="width:20px;height:8px;background:rgba(255,255,255,.15);border-radius:2px;border:1px solid #444"></div><div><div style="font-size:11px;color:#888">Previous</div><div style="font-size:10px;color:#555">'+esc(prevStr)+'</div></div></div>':'')+'</div>'
-    :'<div style="font-size:10px;color:#888">Period [GA4]: <span style="color:#F0F0F0;font-weight:600">'+esc(dr)+'</span></div>')+'</div>';
-  $('tc').innerHTML='<div id="gm"></div>'+periodLegend+'<div class="card"><div class="sec">Views &amp; exit clicks [GA4]'+(dr?' \u2014 '+esc(dr):'')+' (top 10)</div><div style="height:180px"><canvas id="cG4"></canvas></div></div>'+mkFbar('g_','Filter pages...',[{v:'all',l:'All pages'},{v:'money',l:'Money / BOFU pages'}],[{v:'views',l:'Most views'},{v:'ke',l:'Most exit clicks'},{v:'conv',l:'Highest conv.'},{v:'lowconv',l:'Lowest conv. (flag)'},{v:'eng',l:'Highest engagement'}],ptSel)+'<div id="gTbl"></div>';
-  bindFbar('g_',rGA4);rGA4();
-}
-function rGA4(){
-  var a=S.ga4;if(!a)return;var v=fbarVals('g_'),hasCmp=a.hasComparison;
-  var mktKey3=S.market||'all';
-  /* v2.2 FIX: geo-aware filter — geo-specific GA4 properties already contain only that market's data */
-  var geoProps=['ca','uk','ie','it','nz','row'];
-  var isGeoSpecific=geoProps.indexOf(mktKey3)>=0;
-  var skipPath=isGeoSpecific||(mktKey3==='all')||(mktKey3==='global')||(mktKey3==='us');
+  var a=S.ga4,hasCmp=a.hasComparison;
+  var dr=a.ds?drange(a.ds,a.de):'';
+  var prevStr=hasCmp&&a.dsPrev?drange(a.dsPrev,a.dePrev):'';
+
+  // Ensure page types set on all rows
   a.rows.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'other';});
-  var src=a.rows.filter(function(r){
-    if(!skipPath&&!matchMarket(r.page,mktKey3))return false;
-    if(v.q&&r.page.toLowerCase().indexOf(v.q)<0)return false;
-    if(v.ty==='money'&&r.pageType!=='bofu'&&r.pageType!=='casino'&&r.pageType!=='state'&&r.pageType!=='Money Page')return false;
-    if(v.pt!=='all'&&r.pageType!==v.pt)return false;
-    return true;
-  });
-  var so=v.so;src.sort(function(a,b){if(so==='ke')return b.keyEvents-a.keyEvents;if(so==='conv'){var ca=a.views>0?a.keyEvents/a.views:0,cb=b.views>0?b.keyEvents/b.views:0;return cb-ca;}if(so==='lowconv'){var ca2=a.views>0?a.keyEvents/a.views:1,cb2=b.views>0?b.keyEvents/b.views:1;return ca2-cb2;}if(so==='eng')return b.engTime-a.engTime;return b.views-a.views;});
-  var totV=0,totKE=0,totVP=0,totKEP=0;src.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
-  var cnt=$('g_cnt');if(cnt)cnt.textContent=src.length+' pages';
-  var vd=parseFloat(pct(totV,totVP)),kd=parseFloat(pct(totKE,totKEP));
-  var gm=$('gm');if(gm)gm.innerHTML='<div class="g4">'+mkMC('Total views [GA4]',fmt(totV),hasCmp&&totVP>0?(vd>=0?'\u2191 ':'\u2193 ')+Math.abs(vd)+'% vs prev':'')+mkMC('Exit clicks [GA4]',fmt(totKE),hasCmp&&totKEP>0?(kd>=0?'\u2191 ':'\u2193 ')+Math.abs(kd)+'% vs prev':'exit_click_goal events')+mkMC('Avg conv.',totV>0?(totKE/totV*100).toFixed(1)+'%':'\u2014','Key events / views')+mkMC('Pages',String(src.length),'In current filter')+'</div>';
-  var currLabel=a.ds?drange(a.ds,a.de):'Current',prevLabel=a.dsPrev?drange(a.dsPrev,a.dePrev):'Previous';
-  var cols=[{l:'Type'},{l:'Page',mono:true},{l:'Views ('+currLabel+')',r:true}];
-  if(hasCmp)cols.push({l:'Views ('+prevLabel+')',r:true},{l:'\u0394 views',r:true});
-  cols.push({l:'Exit clicks',r:true});if(hasCmp)cols.push({l:'Exit cl. (prev)',r:true},{l:'\u0394 exit cl.',r:true});
-  cols.push({l:'Conv.',r:true},{l:'Eng. time',r:true});
-  var rows=src.slice(0,100).map(function(r){var cv=r.views>0?r.keyEvents/r.views*100:0,vD=hasCmp&&r.viewsPrev>0?r.views-r.viewsPrev:null,kD=hasCmp&&r.keyEventsPrev>0?r.keyEvents-r.keyEventsPrev:null;var pt=getPageType(r.page);var row=[{l:ptBadge(pt),html:true},r.page,fmt(r.views)];if(hasCmp)row.push({l:fmt(r.viewsPrev||0),c:'#555'},{l:vD!=null?(vD>=0?'+':'')+fmt(vD):'\u2014',c:vD!=null?dcol(vD):null,b:vD!=null});row.push({l:fmt(r.keyEvents),c:r.keyEvents>=50?'#E91E8C':null});if(hasCmp)row.push({l:fmt(r.keyEventsPrev||0),c:'#555'},{l:kD!=null?(kD>=0?'+':'')+fmt(kD):'\u2014',c:kD!=null?dcol(kD):null,b:kD!=null});row.push({l:cv.toFixed(1)+'%',c:cv>=25?'#27AE60':cv>=12?'#E91E8C':cv<3&&r.views>50?'#E05C3A':null,b:cv>=25||cv<3},{l:Math.round(r.engTime)+'s',c:r.engTime<5&&r.views>30?'#E05C3A':null});return row;});
-  var gt=$('gTbl');if(gt)gt.innerHTML=mkTbl(cols,rows,'No pages match filters');
-  var top=src.slice(0,10);var ds=[{label:'Current',data:top.map(function(r){return r.keyEvents;}),backgroundColor:'#E91E8C',borderRadius:3}];if(hasCmp)ds.unshift({label:'Previous',data:top.map(function(r){return r.keyEventsPrev||0;}),backgroundColor:'rgba(255,255,255,.1)',borderRadius:3});
-  barChart('cG4',top.map(function(r){return r.page.replace(/^\/(us|ca)\//,'').replace(/-/g,' ').slice(0,18);}),ds);
+
+  var mktKey=S.market||'all';
+  var mktRows=getGA4FilteredRows(a.rows, mktKey);
+
+  // Compute totals from all filtered rows (not just money pages)
+  var totV=0,totKE=0,totVP=0,totKEP=0;
+  mktRows.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=(r.viewsPrev||0);totKEP+=(r.keyEventsPrev||0);});
+
+  var vd=totVP>0?parseFloat(pct(totV,totVP)):null;
+  var kd=totKEP>0?parseFloat(pct(totKE,totKEP)):null;
+
+  var ptSel=PT_SEL.replace('id="PFXPT"','id="g_pt"');
+
+  // Period banner
+  var periodBanner='<div style="background:#1A1A1A;border:1px solid #2a2a2a;border-radius:11px;padding:10px 16px;margin-bottom:12px">';
+  if(hasCmp && dr && prevStr){
+    periodBanner+='<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">';
+    periodBanner+='<div style="display:flex;align-items:center;gap:8px"><div style="width:20px;height:8px;background:#E91E8C;border-radius:2px"></div><div><div style="font-size:11px;font-weight:600;color:#F0F0F0">Current</div><div style="font-size:10px;color:#888">'+esc(dr)+'</div></div></div>';
+    periodBanner+='<div style="display:flex;align-items:center;gap:8px"><div style="width:20px;height:8px;background:rgba(255,255,255,.15);border-radius:2px;border:1px solid #444"></div><div><div style="font-size:11px;color:#888">Previous</div><div style="font-size:10px;color:#555">'+esc(prevStr)+'</div></div></div>';
+    periodBanner+='</div>';
+  } else {
+    periodBanner+='<div style="font-size:10px;color:#888">Period: <span style="color:#F0F0F0;font-weight:600">'+esc(dr||'Loaded data')+'</span></div>';
+  }
+  periodBanner+='</div>';
+
+  // Metric cards
+  var metricsHtml='<div id="gm" class="g4">'
+    +mkMC('Total Views [GA4]',fmt(totV),
+      vd!==null?(vd>=0?'\u2191 '+Math.abs(vd)+'% vs prev':'\u2193 '+Math.abs(vd)+'% vs prev'):'All pages',
+      vd!==null?(vd>=0?'#27AE60':'#E05C3A'):'#888', dr)
+    +mkMC('Exit Click Goals',fmt(totKE),
+      kd!==null?(kd>=0?'\u2191 '+Math.abs(kd)+'% vs prev':'\u2193 '+Math.abs(kd)+'% vs prev'):'exit_click_goal events',
+      kd!==null?(kd>=0?'#27AE60':'#E05C3A'):'#E91E8C')
+    +mkMC('Avg Conv. Rate',totV>0?(totKE/totV*100).toFixed(2)+'%':'\u2014','Exit clicks \u00f7 views','#888')
+    +mkMC('Pages',String(mktRows.length),'Matching market filter','#555')
+    +'</div>';
+
+  $('tc').innerHTML=metricsHtml+periodBanner
+    +'<div class="card"><div class="sec">Exit Click Goals — top 10 pages</div><div style="height:185px"><canvas id="cG4"></canvas></div></div>'
+    +mkFbar('g_','Filter by page URL...',
+      [{v:'all',l:'All pages'},{v:'money',l:'Money pages only'}],
+      [{v:'views',l:'\u2193 Most views'},{v:'ke',l:'\u2193 Exit clicks'},{v:'conv',l:'\u2193 Highest conv.'},{v:'lowconv',l:'\u2191 Lowest conv.'},{v:'eng',l:'\u2193 Engaged'}],
+      ptSel)
+    +'<div id="gTbl"></div>';
+
+  bindFbar('g_',rGA4);
+  rGA4();
 }
-/* KEYWORDS */
+
+function rGA4(){
+  var a=S.ga4;if(!a)return;
+  var v=fbarVals('g_'),hasCmp=a.hasComparison;
+  var mktKey=S.market||'all';
+
+  a.rows.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'other';});
+
+  // Apply market filter first
+  var src=getGA4FilteredRows(a.rows, mktKey);
+
+  // Apply text search on URL
+  if(v.q) src=src.filter(function(r){return r.page.toLowerCase().indexOf(v.q)>=0;});
+
+  // Apply type filter
+  if(v.ty==='money'){
+    src=src.filter(function(r){
+      return r.pageType==='bofu'||r.pageType==='casino'||r.pageType==='state'||r.pageType==='Money Page';
+    });
+  }
+
+  // Apply page type badge filter
+  if(v.pt!=='all') src=src.filter(function(r){return r.pageType===v.pt;});
+
+  // Sort
+  src=src.slice().sort(function(a2,b2){
+    var so=v.so;
+    if(so==='ke')return b2.keyEvents-a2.keyEvents;
+    if(so==='conv'){var ca=a2.views>0?a2.keyEvents/a2.views:0,cb=b2.views>0?b2.keyEvents/b2.views:0;return cb-ca;}
+    if(so==='lowconv'){var ca2=a2.views>0?a2.keyEvents/a2.views:1,cb2=b2.views>0?b2.keyEvents/b2.views:1;return ca2-cb2;}
+    if(so==='eng')return b2.engTime-a2.engTime;
+    return b2.views-a2.views;
+  });
+
+  // Recompute totals from filtered set
+  var totV=0,totKE=0,totVP=0,totKEP=0;
+  src.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=(r.viewsPrev||0);totKEP+=(r.keyEventsPrev||0);});
+
+  var cnt=$('g_cnt');if(cnt)cnt.textContent=src.length+' pages';
+
+  var vd=totVP>0?parseFloat(pct(totV,totVP)):null;
+  var kd=totKEP>0?parseFloat(pct(totKE,totKEP)):null;
+
+  // Refresh metric cards with filtered totals
+  var gm=$('gm');
+  if(gm) gm.innerHTML=
+    mkMC('Total Views [GA4]',fmt(totV),
+      vd!==null?(vd>=0?'\u2191 '+Math.abs(vd)+'% vs prev':'\u2193 '+Math.abs(vd)+'% vs prev'):'Filtered set',
+      vd!==null?(vd>=0?'#27AE60':'#E05C3A'):'#888', a.ds?drange(a.ds,a.de):'')
+    +mkMC('Exit Click Goals',fmt(totKE),
+      kd!==null?(kd>=0?'\u2191 '+Math.abs(kd)+'% vs prev':'\u2193 '+Math.abs(kd)+'% vs prev'):'exit_click_goal events',
+      kd!==null?(kd>=0?'#27AE60':'#E05C3A'):'#E91E8C')
+    +mkMC('Avg Conv. Rate',totV>0?(totKE/totV*100).toFixed(2)+'%':'\u2014','Exit clicks \u00f7 views','#888')
+    +mkMC('Pages',String(src.length),'Matching filter','#555');
+
+  // Build table
+  var currLabel=a.ds?drange(a.ds,a.de):'Current';
+  var prevLabel=a.dsPrev?drange(a.dsPrev,a.dePrev):a.dePrev?drange('',a.dePrev):'Previous';
+
+  // Build raw HTML table for GA4 (custom rendering for full URL display)
+  var gt=$('gTbl');
+  if(!gt)return;
+
+  if(!src.length){gt.innerHTML='<div class="empty">No pages match filter</div>';return;}
+
+  var thead='<tr>'
+    +'<th>Type</th>'
+    +'<th>Page URL</th>'
+    +'<th class="r">Views</th>'
+    +(hasCmp?'<th class="r">Views prev</th><th class="r">\u0394 Views</th>':'')
+    +'<th class="r">Exit Clicks</th>'
+    +(hasCmp?'<th class="r">Exit Cl. prev</th><th class="r">\u0394 Exit Cl.</th>':'')
+    +'<th class="r">Conv.%</th>'
+    +'<th class="r">Eng. Time</th>'
+    +'</tr>';
+
+  var tbodyRows=src.slice(0,150).map(function(r){
+    var cv=r.views>0?r.keyEvents/r.views*100:0;
+    var vD=hasCmp&&r.viewsPrev>0?r.views-r.viewsPrev:null;
+    var kD=hasCmp&&r.keyEventsPrev>0?r.keyEvents-r.keyEventsPrev:null;
+    var pt=getPageType(r.page);
+    var badge=ptBadge(pt);
+    var pageDisplay=r.page.replace(/^https?:\/\/[^/]+/,'');
+    if(!pageDisplay||pageDisplay==='/')pageDisplay=r.page;
+    var cvCol=cv>=25?'#27AE60':cv>=12?'#E91E8C':cv<3&&r.views>50?'#E05C3A':'#888';
+    var row='<tr>'
+      +'<td>'+badge+'</td>'
+      +'<td class="url-cell" style="font-family:monospace;font-size:10px;color:#aaa" title="'+esc(r.page)+'">'+esc(pageDisplay)+'</td>'
+      +'<td class="r">'+fmt(r.views)+'</td>';
+    if(hasCmp){
+      var vdStr=vD!==null?(vD>=0?'+':'')+fmt(vD):'\u2014';
+      var vdCol=vD!==null?dcol(vD):'#555';
+      row+='<td class="r" style="color:#555">'+fmt(r.viewsPrev||0)+'</td>'
+        +'<td class="r" style="color:'+vdCol+';font-weight:'+(vD!==null?'700':'400')+'">'+vdStr+'</td>';
+    }
+    var keCol=r.keyEvents>=50?'#E91E8C':r.keyEvents>0?'#F0F0F0':'#444';
+    row+='<td class="r" style="color:'+keCol+';font-weight:'+(r.keyEvents>=50?'700':'400')+'">'+fmt(r.keyEvents)+'</td>';
+    if(hasCmp){
+      var kdStr=kD!==null?(kD>=0?'+':'')+fmt(kD):'\u2014';
+      var kdCol=kD!==null?dcol(kD):'#555';
+      row+='<td class="r" style="color:#555">'+fmt(r.keyEventsPrev||0)+'</td>'
+        +'<td class="r" style="color:'+kdCol+';font-weight:'+(kD!==null?'700':'400')+'">'+kdStr+'</td>';
+    }
+    row+='<td class="r" style="color:'+cvCol+';font-weight:'+(cv>=25||cv<3?'700':'400')+'">'+cv.toFixed(2)+'%</td>'
+      +'<td class="r" style="color:'+(r.engTime<5&&r.views>30?'#E05C3A':'#555')+'">'+Math.round(r.engTime)+'s</td>'
+      +'</tr>';
+    return row;
+  }).join('');
+
+  gt.innerHTML='<div class="tbl"><table><thead>'+thead+'</thead><tbody>'+tbodyRows+'</tbody></table></div>';
+
+  // Update chart — exit clicks by top pages
+  var top=src.slice(0,10);
+  var ds=[{label:'Exit Clicks',data:top.map(function(r){return r.keyEvents;}),backgroundColor:'#E91E8C',borderRadius:3}];
+  if(hasCmp) ds.unshift({label:'Exit Clicks (prev)',data:top.map(function(r){return r.keyEventsPrev||0;}),backgroundColor:'rgba(255,255,255,.1)',borderRadius:3});
+  barChart('cG4',top.map(function(r){
+    var p=r.page.replace(/^\/(us|ca|uk|ie|it|nz)\//,'').replace(/-/g,' ');
+    return p.length>22?p.slice(0,20)+'\u2026':p;
+  }),ds);
+}
+/* ============================================================
+   KEYWORDS TAB — v2.3 REWRITE
+   Fixed: URL as first column, clickable URL drill-down,
+   working search bar (searches query text AND URLs),
+   position change column always visible when comparison exists
+   ============================================================ */
 function tabKeywords(){
   if(!S.gsc){$('tc').innerHTML='<div class="empty">Upload a GSC zip to see keyword data</div>';return;}
-  var g=S.gsc,v=S.kw,dr=g.ds?drange(g.ds,g.de):g.dateRange,mktKey=S.market||'all';
-  var allQs=g.queries||[];var hasPageData=allQs.length>0&&allQs[0].page!==undefined;
-  var qs=allQs.filter(function(q){if(!hasPageData||mktKey==='all')return true;return matchMarket(q.page,mktKey);});
-  var urlQ=(S.kwUrlQ||'').toLowerCase();if(urlQ)qs=qs.filter(function(q){return q.page&&q.page.toLowerCase().indexOf(urlQ)>=0;});
-  var sets={top:qs.slice().sort(function(a,b){return b.li-a.li;}).slice(0,40),gainers:qs.filter(function(q){return q.lc>q.pc&&q.lc>=2;}).sort(function(a,b){return(b.lc-b.pc)-(a.lc-a.pc);}).slice(0,40),losers:qs.filter(function(q){return q.lc<q.pc&&q.pc>=2;}).sort(function(a,b){return(a.lc-a.pc)-(b.lc-b.pc);}).slice(0,40),opps:qs.filter(function(q){return q.li>100&&q.lp>10&&q.lp<=20&&q.lctr&&parseFloat(q.lctr)<3;}).sort(function(a,b){return b.li-a.li;}).slice(0,40),page1:qs.filter(function(q){return q.lp>=1&&q.lp<=10;}).sort(function(a,b){return a.lp-b.lp;}).slice(0,40)};
-  var cur=sets[v]||sets.top;
-  var cols=[{l:'Query',mono:true},{l:'Impressions',r:true},{l:'Clicks',r:true},{l:'CTR',r:true},{l:'Position',r:true}];
-  if(g.hasComparison)cols.push({l:'Pos. change',r:true});if(hasPageData)cols.push({l:'Page URL',mono:true});
-  var rows=cur.map(function(q){var d=q.pp>0&&q.lp>0?q.pp-q.lp:null;var row=[{l:q.key},{l:q.li.toLocaleString(),c:'#888'},{l:String(q.lc),c:q.lc>q.pc?'#27AE60':null},{l:q.lctr,c:'#555'},{l:q.lp>0?q.lp.toFixed(1):'\u2014',c:q.lp>0&&q.lp<=3?'#E91E8C':q.lp<=10?'#27AE60':null}];if(g.hasComparison)row.push({l:d!=null?(d>0?'+':'')+d.toFixed(1):'\u2014',c:dcol(d||0),b:true});if(hasPageData)row.push({l:q.page?q.page.replace('https://www.casinos.com',''):'\u2014',c:'#555'});return row;});
+  var g=S.gsc,dr=g.ds?drange(g.ds,g.de):g.dateRange,mktKey=S.market||'all';
+  var allQs=g.queries||[];
+  var hasPageData=allQs.length>0&&allQs.some(function(q){return q.page;});
+
+  // Market filter
+  var qs=allQs.filter(function(q){
+    if(mktKey==='all')return true;
+    if(!q.page)return true; // include queries without page data
+    return matchMarket(q.page,mktKey);
+  });
+
+  // Active URL drill-down filter
+  var activeUrl=S.kwActiveUrl||null;
+  if(activeUrl){
+    qs=qs.filter(function(q){return q.page===activeUrl;});
+  }
+
+  // Text search — searches BOTH query text AND URL
+  var searchVal=(S.kwSearch||'').toLowerCase();
+  if(searchVal){
+    qs=qs.filter(function(q){
+      return q.key.toLowerCase().indexOf(searchVal)>=0||
+             (q.page&&q.page.toLowerCase().indexOf(searchVal)>=0);
+    });
+  }
+
+  // Tab sets
+  var sets={
+    top:qs.slice().sort(function(a,b){return b.li-a.li;}).slice(0,100),
+    gainers:qs.filter(function(q){return q.lc>q.pc&&q.lc>=2;}).sort(function(a,b){return(b.lc-b.pc)-(a.lc-a.pc);}).slice(0,100),
+    losers:qs.filter(function(q){return q.lc<q.pc&&q.pc>=2;}).sort(function(a,b){return(a.lc-a.pc)-(b.lc-b.pc);}).slice(0,100),
+    opps:qs.filter(function(q){return q.li>100&&q.lp>10&&q.lp<=20&&q.lctr&&parseFloat(q.lctr)<3;}).sort(function(a,b){return b.li-a.li;}).slice(0,100),
+    page1:qs.filter(function(q){return q.lp>=1&&q.lp<=10;}).sort(function(a,b){return a.lp-b.lp;}).slice(0,100)
+  };
+  var cur=sets[S.kw]||sets.top;
   var tabDefs=[{id:'top',l:'Top impressions'},{id:'gainers',l:'Click gainers'},{id:'losers',l:'Click losers'},{id:'opps',l:'Opportunities'},{id:'page1',l:'Page 1'}];
-  var html='<div style="font-size:10px;color:#666;margin-bottom:10px">Period [GSC]: '+esc(dr)+(g.hasComparison?' \u00b7 vs previous period':'')+(mktKey!=='all'?' \u00b7 <span style="color:#E91E8C">'+esc(MARKETS[mktKey]?MARKETS[mktKey].label:mktKey)+'</span>':'')+'</div>';
-  html+='<div style="display:flex;gap:8px;margin-bottom:10px"><input id="kwUrlInput" type="text" placeholder="Filter by page URL (e.g. /us/bonus)" value="'+esc(S.kwUrlQ||'')+'" style="flex:1;height:28px;background:var(--bg3);border:1px solid #444;border-radius:6px;color:var(--t);font-size:11px;padding:0 10px;font-family:inherit"></div>';
+
+  // Header info bar
+  var html='<div style="font-size:10px;color:#666;margin-bottom:10px">'
+    +'Period [GSC]: '+esc(dr)+(g.hasComparison?' \u00b7 vs previous period':'')
+    +(mktKey!=='all'?' \u00b7 <span style="color:#E91E8C">'+esc(MARKETS[mktKey]?MARKETS[mktKey].label:mktKey)+'</span>':'')
+    +(hasPageData?'':' \u00b7 <span style="color:#555">No page data in this export</span>')
+    +'</div>';
+
+  // Search bar
+  html+='<div style="background:var(--bg2);border:1px solid #333;border-radius:11px;padding:10px 13px;margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<input id="kwSearch" type="text" placeholder="Search keywords or page URLs\u2026" value="'+esc(S.kwSearch||'')+'" style="flex:1;min-width:200px;height:32px">'
+    +(searchVal||activeUrl?'<button id="kwClearAll" style="font-size:11px;color:#888;border-color:#444;padding:4px 10px">Clear filters</button>':'')
+    +'</div>';
+
+  // Active URL drill-down indicator
+  if(activeUrl){
+    html+='<div class="kw-url-filter"><span>Filtered to URL:</span><code>'+esc(activeUrl.replace(/^https?:\/\/[^/]+/,''))+'</code><button id="kwClearUrl">\u2715</button></div>';
+  }
+
+  // Tab buttons
   html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">';
-  tabDefs.forEach(function(t){html+='<button class="tb'+(v===t.id?' on':'')+'" data-kw="'+t.id+'" style="font-size:11px">'+t.l+' ('+sets[t.id].length+')</button>';});
-  html+='</div>'+mkTbl(cols,rows,'No keywords match filters');
+  tabDefs.forEach(function(t){
+    html+='<button class="tb'+(S.kw===t.id?' on':'')+'" data-kw="'+t.id+'" style="font-size:11px">'+t.l+' ('+sets[t.id].length+')</button>';
+  });
+  html+='</div>';
+
+  if(!cur.length){
+    html+='<div class="empty">No keywords match your filters'+(searchVal?' for "'+esc(searchVal)+'"':'')+'</div>';
+    $('tc').innerHTML=html;
+    _bindKwEvents();
+    return;
+  }
+
+  // Build custom table with clickable URL column
+  var hasCmp=g.hasComparison;
+  html+='<div class="tbl"><table>';
+  html+='<thead><tr>';
+  html+='<th>URL'+(hasPageData?' <span style="color:#444;font-weight:400;text-transform:none;font-size:8px">(click to filter)</span>':'</th>')+'</th>';
+  html+='<th>Keyword</th>';
+  html+='<th class="r">Impr.</th>';
+  html+='<th class="r">Clicks</th>';
+  html+='<th class="r">CTR</th>';
+  html+='<th class="r">Position</th>';
+  if(hasCmp) html+='<th class="r">Pos. change</th>';
+  html+='</tr></thead><tbody>';
+
+  cur.forEach(function(q){
+    var d=q.pp>0&&q.lp>0?q.pp-q.lp:null;
+    var pageRaw=q.page||'';
+    var pageDisplay=pageRaw.replace(/^https?:\/\/[^/]+/,'');
+    if(!pageDisplay)pageDisplay=pageRaw;
+    var isActive=activeUrl&&q.page===activeUrl;
+    var posCol=q.lp>0&&q.lp<=3?'#E91E8C':q.lp<=10?'#27AE60':'#888';
+    var clicksCol=q.lc>q.pc?'#27AE60':q.lc>0?'#F0F0F0':'#555';
+
+    html+='<tr>';
+
+    // URL column — clickable if page data exists
+    if(hasPageData&&pageRaw){
+      html+='<td class="url-cell">'
+        +'<button class="url-btn'+(isActive?' active':'')+'" data-kwurl="'+esc(pageRaw)+'" title="'+esc(pageDisplay)+'">'
+        +esc(pageDisplay.length>36?pageDisplay.slice(0,34)+'\u2026':pageDisplay)
+        +'</button>'
+        +'</td>';
+    } else {
+      html+='<td style="color:#444;font-size:10px">\u2014</td>';
+    }
+
+    // Keyword
+    html+='<td style="font-family:monospace;font-size:10.5px;color:#F0F0F0;max-width:280px;overflow:hidden;text-overflow:ellipsis" title="'+esc(q.key)+'">'+esc(q.key)+'</td>';
+    // Impressions
+    html+='<td class="r" style="color:#888">'+q.li.toLocaleString()+'</td>';
+    // Clicks
+    html+='<td class="r" style="color:'+clicksCol+'">'+q.lc+'</td>';
+    // CTR
+    html+='<td class="r" style="color:#555">'+esc(q.lctr)+'</td>';
+    // Position
+    html+='<td class="r" style="color:'+posCol+';font-weight:'+(q.lp>0&&q.lp<=3?'700':'400')+'">'+(q.lp>0?q.lp.toFixed(1):'\u2014')+'</td>';
+    // Position change
+    if(hasCmp){
+      var dStr=d!==null?(d>0?'+':'')+d.toFixed(1):'\u2014';
+      var dCol=d!==null?dcol(d):'#444';
+      html+='<td class="r" style="color:'+dCol+';font-weight:'+(d!==null?'700':'400')+'">'+dStr+'</td>';
+    }
+    html+='</tr>';
+  });
+
+  html+='</tbody></table></div>';
+
   $('tc').innerHTML=html;
-  document.querySelectorAll('[data-kw]').forEach(function(btn){btn.onclick=function(){S.kw=btn.getAttribute('data-kw');tabKeywords();};});
-  var kwUrl=$('kwUrlInput');if(kwUrl)kwUrl.oninput=function(){S.kwUrlQ=kwUrl.value;clearTimeout(S._kwT);S._kwT=setTimeout(function(){tabKeywords();},300);};
+  _bindKwEvents();
 }
-/* AI TAKEAWAYS + REPORT GENERATION (v2.2) */
+
+function _bindKwEvents(){
+  // Tab buttons
+  document.querySelectorAll('[data-kw]').forEach(function(btn){
+    btn.onclick=function(){S.kw=btn.getAttribute('data-kw');tabKeywords();};
+  });
+
+  // Search input — searches query text AND URLs
+  var srch=$('kwSearch');
+  if(srch){
+    srch.oninput=function(){
+      S.kwSearch=srch.value;
+      clearTimeout(S._kwT);
+      S._kwT=setTimeout(tabKeywords,300);
+    };
+    // Focus search bar on load so user can type immediately
+    srch.focus();
+  }
+
+  // Clear all filters
+  var clearAll=$('kwClearAll');
+  if(clearAll){
+    clearAll.onclick=function(){S.kwSearch='';S.kwActiveUrl=null;tabKeywords();};
+  }
+
+  // Clear URL filter
+  var clearUrl=$('kwClearUrl');
+  if(clearUrl){
+    clearUrl.onclick=function(){S.kwActiveUrl=null;tabKeywords();};
+  }
+
+  // Clickable URL buttons — toggle drill-down
+  document.querySelectorAll('[data-kwurl]').forEach(function(btn){
+    btn.onclick=function(){
+      var url=btn.getAttribute('data-kwurl');
+      S.kwActiveUrl=(S.kwActiveUrl===url)?null:url;
+      tabKeywords();
+    };
+  });
+}
+/* AI TAKEAWAYS */
 function tabTakeaways(){
   if(!S.gsc&&!S.ga4){$('tc').innerHTML='<div class="empty">Upload data first</div>';return;}
   if(S.ta){showTA();return;}
@@ -375,9 +701,8 @@ window.runTA=function(){
   var mktKey=S.market||'all',mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
   var prompt='Expert SEO analyst for '+(g?g.site:'casinos.com')+' ('+mktLabel+'), period: '+dr+(g&&g.hasComparison?' vs previous period':'')+'.\n\nGSC: Clicks '+pc.toLocaleString()+'\u2192'+lc.toLocaleString()+' ('+pct(lc,pc)+'%) | Impr '+pi.toLocaleString()+'\u2192'+li.toLocaleString()+' ('+pct(li,pi)+'%)\n\nPAGES:\n'+tp.map(function(p){return slug(p.key)+'|'+p.pc+'\u2192'+p.lc+'cl|'+p.pp.toFixed(1)+'\u2192'+p.lp.toFixed(1)+'pos|'+p.li.toLocaleString()+'impr|type:'+getPageType(p.key);}).join('\n')+'\n\nGAINERS: '+gn.map(function(p){return slug(p.key)+' +'+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\nDECLINERS: '+ls.map(function(p){return slug(p.key)+' '+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\n\nQUERIES: '+tq.map(function(q){return'"'+q.key+'" '+q.li.toLocaleString()+'impr '+q.lc+'cl pos'+q.lp.toFixed(1);}).join(' | ')+'\nOPPS: '+op.map(function(q){return'"'+q.key+'" '+q.li.toLocaleString()+'impr pos'+q.lp.toFixed(1);}).join(' | ')+(gm.length?'\n\nGA4: '+tv.toLocaleString()+'v vs '+tvp.toLocaleString()+'v | '+tk.toLocaleString()+'ke vs '+tkp.toLocaleString()+'ke\n'+gm.map(function(r){return r.page+' '+r.views+'v(prev:'+(r.viewsPrev||0)+'v) '+r.keyEvents+'ke(prev:'+(r.keyEventsPrev||0)+'ke) '+(r.views>0?(r.keyEvents/r.views*100).toFixed(1):0)+'%';}).join('\n'):'')+'\n\nReply EXACTLY:\n## Executive summary\n[2 sentences]\n\n## What is working\n- [finding with data]\n\n## Concerns\n- [concern with data]\n\n## Actions for the team\n1. [action]\n2. [action]\n3. [action]\n\n## Keyword opportunities\n- [query: insight]';
   fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:900,messages:[{role:'user',content:prompt}]})})
-  .then(function(r){return r.json();}).then(function(d){S.ta=d.content&&d.content.length>0?d.content.map(function(c){return c.text||'';}).join(''):(d.error?'API Error: '+JSON.stringify(d.error):'No response \u2014 check ANTHROPIC_API_KEY in Netlify env vars.');showTA();}).catch(function(e){S.ta='Error: '+e.message;showTA();});
+  .then(function(r){return r.json();}).then(function(d){S.ta=d.content&&d.content.length>0?d.content.map(function(c){return c.text||'';}).join(''):(d.error?'API Error: '+JSON.stringify(d.error):'No response \u2014 check ANTHROPIC_API_KEY.');showTA();}).catch(function(e){S.ta='Error: '+e.message;showTA();});
 };
-/* v2.2 NEW: Generate full report PDF via Claude API */
 window.runReport=function(){
   var btn=document.getElementById('genReportBtn'),status=document.getElementById('reportStatus');
   if(btn){btn.disabled=true;btn.textContent='Generating report...';}
@@ -394,17 +719,13 @@ window.runReport=function(){
   var mPgs=a?a.rows.filter(function(r){return r.pageType==='bofu'||r.pageType==='casino'||r.pageType==='state'||r.pageType==='Money Page';}).sort(function(a,b){return b.views-a.views;}).slice(0,12):[];
   var totV=0,totKE=0,totVP=0,totKEP=0;mPgs.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
   var ga4sec='';
-  if(a&&mPgs.length){
-    ga4sec='GA4 MONEY PAGES (excl 200ndb):\nTotal views: '+totV+' vs '+totVP+' ('+pct(totV,totVP)+'%)\nTotal exit clicks: '+totKE+' vs '+totKEP+' ('+pct(totKE,totKEP)+'%)\n';
-    ga4sec+=mPgs.map(function(r){var cv=r.views>0?(r.keyEvents/r.views*100).toFixed(1):0;var cvp=(r.viewsPrev||0)>0?((r.keyEventsPrev||0)/(r.viewsPrev)*100).toFixed(1):0;return r.page+'|views:'+(r.viewsPrev||0)+'->'+r.views+'|eng:'+(r.engTime||0).toFixed(0)+'s|exitclicks:'+(r.keyEventsPrev||0)+'->'+r.keyEvents+'|conv:'+cvp+'%->'+cv+'%';}).join('\n');
-  }
+  if(a&&mPgs.length){ga4sec='GA4 MONEY PAGES:\nTotal views: '+totV+' vs '+totVP+' ('+pct(totV,totVP)+'%)\nTotal exit clicks: '+totKE+' vs '+totKEP+' ('+pct(totKE,totKEP)+'%)\n';ga4sec+=mPgs.map(function(r){var cv=r.views>0?(r.keyEvents/r.views*100).toFixed(1):0;var cvp=(r.viewsPrev||0)>0?((r.keyEventsPrev||0)/(r.viewsPrev)*100).toFixed(1):0;return r.page+'|views:'+(r.viewsPrev||0)+'->'+r.views+'|eng:'+(r.engTime||0).toFixed(0)+'s|exitclicks:'+(r.keyEventsPrev||0)+'->'+r.keyEvents+'|conv:'+cvp+'%->'+cv+'%';}).join('\n');}
   var prompt='You are an expert SEO analyst for casinos.com. Generate a professional SEO performance report in markdown.\n\nMARKET: '+mktLabel+'\nPERIOD: '+dr+(g&&g.hasComparison?' vs previous period':'')+'\n\nGSC SUMMARY:\nClicks: '+pc.toLocaleString()+'->'+lc.toLocaleString()+' ('+pct(lc,pc)+'%) | Impressions: '+pi.toLocaleString()+'->'+li.toLocaleString()+' ('+pct(li,pi)+'%)\n\nBOFU & STATE PAGES [GSC]:\n'+bofuPgs.map(function(p){return slug(p.key)+'|pos:'+p.pp.toFixed(1)+'->'+p.lp.toFixed(1)+'|clicks:'+p.pc+'->'+p.lc+'|impr:'+p.li+'|type:'+getPageType(p.key);}).join('\n')+'\n\nPOSITION GAINERS: '+gainers.map(function(p){return slug(p.key)+' +'+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\nPOSITION DECLINERS: '+decliners.map(function(p){return slug(p.key)+' '+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\n\nKEYWORD OPPORTUNITIES [GSC] (pos 10-20, 100+ impr, CTR<3%):\n'+opps.map(function(q){return '"'+q.key+'" impr:'+q.li+' pos:'+q.lp.toFixed(1)+' ctr:'+q.lctr;}).join('\n')+(ga4sec?'\n\n'+ga4sec:'')+'\n\nWrite the report with EXACTLY these ## sections:\n## Executive Summary\n## GSC Performance\n## BOFU & State Page Analysis\n## GA4 Engagement & Exit Clicks\n## Keyword Opportunities\n## What Is Working\n## Priority Actions\n(number actions 1-5, be specific with page names and data)';
   fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})})
   .then(function(r){return r.json();})
   .then(function(d){
     var text=d.content&&d.content.length>0?d.content.map(function(c){return c.text||'';}).join(''):(d.error?'Error: '+JSON.stringify(d.error):'No response');
-    S.reportMd=text;
-    if(btn){btn.disabled=false;btn.textContent='\uD83D\uDCC4 Generate full report PDF';}
+    S.reportMd=text;if(btn){btn.disabled=false;btn.textContent='\uD83D\uDCC4 Generate full report PDF';}
     if(status)status.innerHTML='<span style="color:#27AE60">\u2713 Report ready \u2014 <a href="#" onclick="downloadReportPDF();return false;" style="color:#E91E8C">Download PDF</a></span>';
     downloadReportPDF();
   })
@@ -412,29 +733,12 @@ window.runReport=function(){
 };
 window.downloadReportPDF=function(){
   if(!S.reportMd){window.runReport();return;}
-  var md=S.reportMd,mktKey=S.market||'all';
-  var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
+  var md=S.reportMd,mktKey=S.market||'all',mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
   var g=S.gsc,dr=g?(g.ds?drange(g.ds,g.de):g.dateRange):'';
-  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'
-    +'body{font-family:system-ui,sans-serif;color:#111;font-size:13px;line-height:1.7;max-width:820px;margin:0 auto;padding:30px}'
-    +'h1{font-size:20px;color:#E91E8C;border-bottom:2px solid #E91E8C;padding-bottom:8px;margin:0 0 16px}'
-    +'h2{font-size:14px;font-weight:700;color:#111;margin:22px 0 8px;padding:5px 10px;background:#f5f5f5;border-left:3px solid #E91E8C}'
-    +'p{margin:0 0 9px}ul,ol{padding-left:20px;margin:0 0 10px}li{margin-bottom:3px}'
-    +'strong{font-weight:700}.cover{background:#111;color:#fff;padding:22px;border-radius:6px;margin-bottom:22px}'
-    +'.cover h1{color:#E91E8C;border-color:#E91E8C;font-size:18px}.cover p{color:#888;font-size:11px;margin:3px 0}'
-    +'@media print{body{padding:0}}</style></head><body>'
-    +'<div class="cover"><h1>casinos.com SEO Report</h1><p>'+esc(mktLabel)+' &middot; '+esc(dr)+'</p>'
-    +'<p>Generated '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})+'</p>'
-    +'<p style="font-size:10px;color:#555;margin-top:8px">[GSC] = Google Search Console &nbsp;&middot;&nbsp; [GA4] = Google Analytics 4</p></div>';
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:system-ui,sans-serif;color:#111;font-size:13px;line-height:1.7;max-width:820px;margin:0 auto;padding:30px}h1{font-size:20px;color:#E91E8C;border-bottom:2px solid #E91E8C;padding-bottom:8px;margin:0 0 16px}h2{font-size:14px;font-weight:700;color:#111;margin:22px 0 8px;padding:5px 10px;background:#f5f5f5;border-left:3px solid #E91E8C}p{margin:0 0 9px}ul,ol{padding-left:20px;margin:0 0 10px}li{margin-bottom:3px}strong{font-weight:700}.cover{background:#111;color:#fff;padding:22px;border-radius:6px;margin-bottom:22px}.cover h1{color:#E91E8C;border-color:#E91E8C;font-size:18px}.cover p{color:#888;font-size:11px;margin:3px 0}@media print{body{padding:0}}</style></head><body>'
+    +'<div class="cover"><h1>casinos.com SEO Report</h1><p>'+esc(mktLabel)+' &middot; '+esc(dr)+'</p><p>Generated '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})+'</p><p style="font-size:10px;color:#555;margin-top:8px">[GSC] = Google Search Console &nbsp;&middot;&nbsp; [GA4] = Google Analytics 4</p></div>';
   var lines=md.split('\n');var inList=false,listType='';
-  lines.forEach(function(line){
-    if(line.startsWith('# ')){if(inList){html+='</'+listType+'>';inList=false;}html+='<h1>'+esc(line.slice(2))+'</h1>';}
-    else if(line.startsWith('## ')){if(inList){html+='</'+listType+'>';inList=false;}html+='<h2>'+esc(line.slice(3))+'</h2>';}
-    else if(/^\d+\.\s/.test(line)){if(!inList||listType!=='ol'){if(inList)html+='</'+listType+'>';html+='<ol>';inList=true;listType='ol';}html+='<li>'+esc(line.replace(/^\d+\.\s/,''))+'</li>';}
-    else if(line.startsWith('- ')||line.startsWith('* ')){if(!inList||listType!=='ul'){if(inList)html+='</'+listType+'>';html+='<ul>';inList=true;listType='ul';}html+='<li>'+esc(line.slice(2))+'</li>';}
-    else if(line.trim()===''){if(inList){html+='</'+listType+'>';inList=false;}}
-    else{if(inList){html+='</'+listType+'>';inList=false;}if(line.trim())html+='<p>'+line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')+'</p>';}
-  });
+  lines.forEach(function(line){if(line.startsWith('# ')){if(inList){html+='</'+listType+'>';inList=false;}html+='<h1>'+esc(line.slice(2))+'</h1>';}else if(line.startsWith('## ')){if(inList){html+='</'+listType+'>';inList=false;}html+='<h2>'+esc(line.slice(3))+'</h2>';}else if(/^\d+\.\s/.test(line)){if(!inList||listType!=='ol'){if(inList)html+='</'+listType+'>';html+='<ol>';inList=true;listType='ol';}html+='<li>'+esc(line.replace(/^\d+\.\s/,''))+'</li>';}else if(line.startsWith('- ')||line.startsWith('* ')){if(!inList||listType!=='ul'){if(inList)html+='</'+listType+'>';html+='<ul>';inList=true;listType='ul';}html+='<li>'+esc(line.slice(2))+'</li>';}else if(line.trim()===''){if(inList){html+='</'+listType+'>';inList=false;}}else{if(inList){html+='</'+listType+'>';inList=false;}if(line.trim())html+='<p>'+line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')+'</p>';}});
   if(inList)html+='</'+listType+'>';
   html+='<p style="font-size:10px;color:#aaa;margin-top:28px;border-top:1px solid #eee;padding-top:8px">casinos.com SEO Report &mdash; CONFIDENTIAL</p></body></html>';
   var w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},600);}
@@ -451,48 +755,29 @@ function showTA(){
 /* UPLOAD SCREEN */
 function renderUpload(){
   var hasLoaded=S.files.some(function(f){return f.status==='ok';});
-  ROOT.innerHTML='<div class="up"><div style="text-align:center;margin-bottom:24px"><div class="ulogo"><svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg></div><div style="font-size:24px;font-weight:700;color:var(--t);margin-bottom:5px">SEO Dashboard</div><div style="font-size:13px;color:var(--tm)">casinos.com \u00b7 v2.2</div></div>'
+  ROOT.innerHTML='<div class="up"><div style="text-align:center;margin-bottom:24px"><div class="ulogo"><svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg></div><div style="font-size:24px;font-weight:700;color:var(--t);margin-bottom:5px">SEO Dashboard</div><div style="font-size:13px;color:var(--tm)">casinos.com \u00b7 v2.3</div></div>'
     +'<div style="background:var(--bg2);border:1px solid #333;border-radius:11px;padding:16px 18px;margin-bottom:14px">'
     +'<div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px">\u26a1 Live data \u2014 no uploads needed</div>'
     +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">'
     +'<span style="font-size:10px;color:#666">Date range:</span>'
-    +'<select id="dateRangeSel" style="height:24px;border:1px solid #444;border-radius:6px;background:var(--bg3);color:#ccc;font-size:10px;padding:0 6px;font-family:inherit">'
-    +Object.keys(DATE_RANGES).map(function(k){return'<option value="'+k+'"'+(S.dateRange===k?' selected':'')+'>'+DATE_RANGES[k].label+'</option>';}).join('')
-    +'</select><span style="font-size:10px;color:#555" id="rangeHint">vs previous equal period</span>'
+    +'<select id="dateRangeSel" style="height:24px;border:1px solid #444;border-radius:6px;background:var(--bg3);color:#ccc;font-size:10px;padding:0 6px;font-family:inherit">'+Object.keys(DATE_RANGES).map(function(k){return'<option value="'+k+'"'+(S.dateRange===k?' selected':'')+'>'+DATE_RANGES[k].label+'</option>';}).join('')+'</select>'
+    +'<span style="font-size:10px;color:#555" id="rangeHint">vs previous equal period</span>'
     +'</div>'
     +'<div id="customDates" style="display:'+(S.dateRange==='custom'?'flex':'none')+';flex-direction:column;gap:6px;background:var(--bg3);border:1px solid #333;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
-    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:10px;color:#888;width:90px">Current period</span>'
-    +'<input type="date" id="cStart" value="'+(S.customStart||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#F0F0F0;font-size:10px;padding:0 6px;font-family:inherit">'
-    +'<span style="font-size:10px;color:#555">to</span>'
-    +'<input type="date" id="cEnd" value="'+(S.customEnd||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#F0F0F0;font-size:10px;padding:0 6px;font-family:inherit">'
-    +'</div>'
-    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:10px;color:#555;width:90px">Compare to</span>'
-    +'<input type="date" id="cPrevStart" value="'+(S.customPrevStart||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#888;font-size:10px;padding:0 6px;font-family:inherit">'
-    +'<span style="font-size:10px;color:#555">to</span>'
-    +'<input type="date" id="cPrevEnd" value="'+(S.customPrevEnd||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#888;font-size:10px;padding:0 6px;font-family:inherit">'
-    +'<span style="font-size:10px;color:#555">(optional)</span>'
-    +'</div></div>'
-    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
-    +'<button id="liveLoadBtn" style="background:var(--pink);color:#fff;border-color:var(--pink);font-weight:700;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load live data</button>'
-    +'<span style="font-size:11px;color:#555">then filter by market in the dashboard</span>'
-    +'</div>'
-    +'<div id="liveStatus" style="font-size:11px;min-height:18px;margin-top:4px"></div>'
-    +'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:10px;color:#888;width:90px">Current period</span><input type="date" id="cStart" value="'+(S.customStart||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#F0F0F0;font-size:10px;padding:0 6px;font-family:inherit"><span style="font-size:10px;color:#555">to</span><input type="date" id="cEnd" value="'+(S.customEnd||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#F0F0F0;font-size:10px;padding:0 6px;font-family:inherit"></div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:10px;color:#555;width:90px">Compare to</span><input type="date" id="cPrevStart" value="'+(S.customPrevStart||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#888;font-size:10px;padding:0 6px;font-family:inherit"><span style="font-size:10px;color:#555">to</span><input type="date" id="cPrevEnd" value="'+(S.customPrevEnd||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#888;font-size:10px;padding:0 6px;font-family:inherit"><span style="font-size:10px;color:#555">(optional)</span></div></div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><button id="liveLoadBtn" style="background:var(--pink);color:#fff;border-color:var(--pink);font-weight:700;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load live data</button><span style="font-size:11px;color:#555">then filter by market in the dashboard</span></div>'
+    +'<div id="liveStatus" style="font-size:11px;min-height:18px;margin-top:4px"></div></div>'
     +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="flex:1;height:1px;background:#222"></div><span style="font-size:10px;color:#444;white-space:nowrap">OR UPLOAD MANUALLY</span><div style="flex:1;height:1px;background:#222"></div></div>'
     +'<div class="dz" id="dz"><div style="font-size:13px;font-weight:600;color:var(--t);margin-bottom:4px">Drop GSC .zip or GA4 .csv files here</div><div style="font-size:11px;color:var(--tm)">Click to browse \u00b7 Multiple files \u00b7 Comparison exports auto-detected</div><input id="fu" type="file" multiple accept=".zip,.csv" style="display:none"></div>'
-    +'<div id="flist">'+S.files.map(function(f,i){var isZ=f.type==='GSC';var sc=f.status==='ok'?'color:#27AE60':f.status==='error'?'color:#E05C3A':'color:#555';return'<div class="fi"><span class="ftag" style="'+(isZ?'color:#E91E8C;background:rgba(233,30,140,.12)':'color:#27AE60;background:rgba(39,174,96,.12)')+'">'+f.type+'</span><span class="fn">'+esc(f.name)+'</span>'+(f.info?'<span class="finfo">'+esc(f.info)+'</span>':'')+'<span class="fst" style="'+sc+'">'+(f.status==='ok'?'\u2713 Loaded':f.status==='error'?'\u2715 Error':'Loading...')+'</span><button class="frm" data-idx="'+i+'">\u2715</button></div>';}).join('')+'</div>'
+    +'<div id="flist">'+S.files.map(function(f,i){var isZ=f.type==='GSC'||f.type==='LIVE';var sc=f.status==='ok'?'color:#27AE60':f.status==='error'?'color:#E05C3A':'color:#555';return'<div class="fi"><span class="ftag" style="'+(isZ?'color:#E91E8C;background:rgba(233,30,140,.12)':'color:#27AE60;background:rgba(39,174,96,.12)')+'">'+f.type+'</span><span class="fn">'+esc(f.name)+'</span>'+(f.info?'<span class="finfo">'+esc(f.info)+'</span>':'')+'<span class="fst" style="'+sc+'">'+(f.status==='ok'?'\u2713 Loaded':f.status==='error'?'\u2715 Error':'Loading...')+'</span><button class="frm" data-idx="'+i+'">\u2715</button></div>';}).join('')+'</div>'
     +(hasLoaded?'<div class="analyse-bar"><div style="font-size:12px;color:#888;margin-bottom:10px">'+S.files.filter(function(f){return f.status==='ok';}).length+' file(s) ready'+(S.gsc&&S.gsc.hasComparison?' \u00b7 GSC comparison detected':'')+(S.ga4&&S.ga4.hasComparison?' \u00b7 GA4 comparison detected':'')+'</div><button class="bp" id="analyseBtn">Analyse data \u2192</button></div>':'')
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px"><div style="background:rgba(233,30,140,.05);border:1px solid rgba(233,30,140,.15);border-radius:8px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#E91E8C;margin-bottom:6px">GSC zip export</div><div style="font-size:10px;color:#666;line-height:1.6">Search Console \u2192 Performance \u2192 set dates \u2192 enable comparison \u2192 Export.</div></div><div style="background:rgba(39,174,96,.05);border:1px solid rgba(39,174,96,.15);border-radius:8px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#27AE60;margin-bottom:6px">GA4 CSV export</div><div style="font-size:10px;color:#666;line-height:1.6">GA4 \u2192 Reports \u2192 Pages &amp; screens \u2192 add comparison \u2192 Export CSV.</div></div></div></div>';
   var liveBtn=$('liveLoadBtn');if(liveBtn)liveBtn.onclick=function(){loadLiveData(S.market||'all');};
   var drSel=$('dateRangeSel');
-  if(drSel)drSel.onchange=function(){
-    S.dateRange=drSel.value;var cd=$('customDates'),hint=$('rangeHint');
-    if(cd)cd.style.display=S.dateRange==='custom'?'flex':'none';
-    if(hint)hint.textContent=S.dateRange==='custom'?'specify periods below':'vs previous equal period';
-  };
+  if(drSel)drSel.onchange=function(){S.dateRange=drSel.value;var cd=$('customDates'),hint=$('rangeHint');if(cd)cd.style.display=S.dateRange==='custom'?'flex':'none';if(hint)hint.textContent=S.dateRange==='custom'?'specify periods below':'vs previous equal period';};
   function bindDateInput(id,field){var el=$(id);if(el)el.onchange=function(){S[field]=el.value;};}
-  bindDateInput('cStart','customStart');bindDateInput('cEnd','customEnd');
-  bindDateInput('cPrevStart','customPrevStart');bindDateInput('cPrevEnd','customPrevEnd');
+  bindDateInput('cStart','customStart');bindDateInput('cEnd','customEnd');bindDateInput('cPrevStart','customPrevStart');bindDateInput('cPrevEnd','customPrevEnd');
   var dz=$('dz'),fu=$('fu'),ab=$('analyseBtn');
   if(dz){dz.onclick=function(e){if(e.target!==fu)fu.click();};dz.ondragover=function(e){e.preventDefault();dz.classList.add('drag');};dz.ondragleave=function(){dz.classList.remove('drag');};dz.ondrop=function(e){e.preventDefault();dz.classList.remove('drag');addFiles(e.dataTransfer.files);};}
   if(fu)fu.onchange=function(){addFiles(fu.files);};
@@ -504,30 +789,21 @@ function render(){
   if(!S.gsc&&!S.ga4){renderUpload();return;}
   var TABS=[{id:'overview',l:'Overview'},{id:'positions',l:'Positions'},{id:'ga4',l:'GA4'},{id:'keywords',l:'Keywords'},{id:'takeaways',l:'AI Takeaways'}];
   var STAR2='<svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg>';
-  ROOT.innerHTML='<div class="topbar"><div class="lm">'+STAR2+'</div><div><div class="ln">casinos.com</div><span class="ls">SEO Dashboard <span style="font-size:9px;color:#444;font-weight:400">v2.2</span></span></div>'+((S.gsc||S.ga4)?'<div class="dp"><span class="dd"></span>'+esc(dateBadge())+'</div>':'')+(S.gsc&&S.gsc.hasComparison?'<span class="cmp-pill">GSC cmp</span>':'')+(S.ga4&&S.ga4.hasComparison?'<span class="cmp-pill">GA4 cmp</span>':'')+'<div style="flex:1"></div>'
-    +(S.gsc||S.ga4?'<button class="pdf-btn" id="pdfBtn" onclick="downloadPDF()"><svg viewBox="0 0 16 16" style="width:13px;height:13px;fill:currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zm-5 2h10v1.5H3V14z"/></svg>Download PDF</button>':'')
+  ROOT.innerHTML='<div class="topbar"><div class="lm">'+STAR2+'</div><div><div class="ln">casinos.com</div><span class="ls">SEO Dashboard <span style="font-size:9px;color:#444;font-weight:400">v2.3</span></span></div>'+((S.gsc||S.ga4)?'<div class="dp"><span class="dd"></span>'+esc(dateBadge())+'</div>':'')+(S.gsc&&S.gsc.hasComparison?'<span class="cmp-pill">GSC cmp</span>':'')+(S.ga4&&S.ga4.hasComparison?'<span class="cmp-pill">GA4 cmp</span>':'')+'<div style="flex:1"></div>'
+    +(S.gsc||S.ga4?'<button class="pdf-btn" id="pdfBtn" onclick="downloadPDF()"><svg viewBox="0 0 16 16" style="width:13px;height:13px;fill:currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zm-5 2h10v1.5H3V14z"/></svg>PDF</button>':'')
     +((S.gsc||S.ga4)?'<select style="height:26px;border:1px solid #333;border-radius:6px;background:var(--bg3);color:#888;font-size:10px;padding:0 6px;margin-right:6px;font-family:inherit" id="topDateSel">'+Object.keys(DATE_RANGES).map(function(k){return'<option value="'+k+'"'+(S.dateRange===k?' selected':'')+'>'+DATE_RANGES[k].label+'</option>';}).join('')+'</select>':'')
-    +(S.dateRange==='custom'&&(S.gsc||S.ga4)?'<div style="display:flex;gap:4px;align-items:center;margin-right:6px;background:rgba(255,255,255,.04);border:1px solid #333;border-radius:8px;padding:3px 8px">'
-    +'<input type="date" id="tbCStart" value="'+(S.customStart||'')+'" style="height:22px;border:none;background:transparent;color:#F0F0F0;font-size:10px;padding:0;font-family:inherit;width:100px">'
-    +'<span style="font-size:9px;color:#444">vs</span>'
-    +'<input type="date" id="tbCPrevStart" value="'+(S.customPrevStart||'')+'" style="height:22px;border:none;background:transparent;color:#666;font-size:10px;padding:0;font-family:inherit;width:100px">'
-    +'<button id="tbGoBtn" style="background:var(--pink);color:#fff;border:none;border-radius:5px;padding:2px 8px;font-size:9px;cursor:pointer;font-weight:700">Go</button>'
-    +'</div>':'')
+    +(S.dateRange==='custom'&&(S.gsc||S.ga4)?'<div style="display:flex;gap:4px;align-items:center;margin-right:6px;background:rgba(255,255,255,.04);border:1px solid #333;border-radius:8px;padding:3px 8px"><input type="date" id="tbCStart" value="'+(S.customStart||'')+'" style="height:22px;border:none;background:transparent;color:#F0F0F0;font-size:10px;padding:0;font-family:inherit;width:100px"><span style="font-size:9px;color:#444">vs</span><input type="date" id="tbCPrevStart" value="'+(S.customPrevStart||'')+'" style="height:22px;border:none;background:transparent;color:#666;font-size:10px;padding:0;font-family:inherit;width:100px"><button id="tbGoBtn" style="background:var(--pink);color:#fff;border:none;border-radius:5px;padding:2px 8px;font-size:9px;cursor:pointer;font-weight:700">Go</button></div>':'')
     +((S.gsc||S.ga4)?'<select class="mkt-select" id="mktSelect" style="margin-right:6px">'+Object.keys(MARKETS).map(function(k){return'<option value="'+k+'"'+(S.market===k?' selected':'')+'>'+MARKETS[k].label+'</option>';}).join('')+'</select>':'')
     +'<button id="backBtn" style="font-size:11px;margin-left:6px">\u27f5 Upload</button></div>'
     +'<div class="tabnav">'+TABS.map(function(t){return'<button class="tb'+(S.tab===t.id?' on':'')+'" data-tab="'+t.id+'">'+t.l+'</button>';}).join('')+'</div>'
     +'<div class="main" id="tc"></div>';
   document.querySelectorAll('[data-tab]').forEach(function(btn){btn.onclick=function(){S.tab=btn.getAttribute('data-tab');render();};});
-  var bb=$('backBtn');if(bb)bb.onclick=function(){S.gsc=null;S.ga4=null;S.files=[];S.ta=null;S.reportMd=null;S.market='all';renderUpload();};
+  var bb=$('backBtn');if(bb)bb.onclick=function(){S.gsc=null;S.ga4=null;S.files=[];S.ta=null;S.reportMd=null;S.market='all';S.kwSearch='';S.kwActiveUrl=null;renderUpload();};
   var tds=$('topDateSel');
   if(tds)tds.onchange=function(){
-    S.dateRange=tds.value;
-    // v2.2 FIX: always re-render first (shows/hides custom date inputs), then reload if live
-    render();
+    S.dateRange=tds.value;render();
     var isLive=S.files.length>0&&S.files[0].type==='LIVE';
-    if(S.dateRange!=='custom'&&isLive&&N8N_WEBHOOK_URL&&N8N_WEBHOOK_URL!=='YOUR_N8N_WEBHOOK_URL_HERE'){
-      loadLiveData(S.market||'all');
-    }
+    if(S.dateRange!=='custom'&&isLive&&N8N_WEBHOOK_URL&&N8N_WEBHOOK_URL!=='YOUR_N8N_WEBHOOK_URL_HERE')loadLiveData(S.market||'all');
   };
   var tbCS=$('tbCStart'),tbCPS=$('tbCPrevStart'),tbGo=$('tbGoBtn');
   if(tbCS)tbCS.onchange=function(){S.customStart=tbCS.value;};
@@ -535,13 +811,12 @@ function render(){
   if(tbGo)tbGo.onclick=function(){loadLiveData(S.market||'all');};
   var ms=$('mktSelect');
   if(ms)ms.onchange=function(){
-    var newMkt=ms.value;S.market=newMkt;S.ta=null;S.reportMd=null;
+    var newMkt=ms.value;S.market=newMkt;S.ta=null;S.reportMd=null;S.kwActiveUrl=null;
     var isLive=S.files.length>0&&S.files[0].type==='LIVE';
     if(isLive&&N8N_WEBHOOK_URL&&N8N_WEBHOOK_URL!=='YOUR_N8N_WEBHOOK_URL_HERE'){
       var dates2=getDates(S.dateRange||'28d');
       fetch(N8N_WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({site:'https://www.casinos.com/',market:newMkt.toLowerCase(),startDate:dates2.startDate,endDate:dates2.endDate,prevStartDate:dates2.prevStartDate,prevEndDate:dates2.prevEndDate})})
-      .then(function(r){return r.json();})
-      .then(function(d){if(d.gsc){S.gsc=d.gsc;}if(d.ga4){d.ga4.rows.forEach(function(r){r.pageType=getPageType(r.page)||'other';});S.ga4=d.ga4;}render();}).catch(function(){render();});
+      .then(function(r){return r.json();}).then(function(d){if(d.gsc){S.gsc=d.gsc;}if(d.ga4){d.ga4.rows.forEach(function(r){r.pageType=getPageType(r.page)||'other';});S.ga4=d.ga4;}render();}).catch(function(){render();});
     }else{render();}
   };
   doTab();
@@ -550,7 +825,7 @@ function doTab(){if(S.tab==='overview')tabOverview();else if(S.tab==='positions'
 /* PDF EXPORT */
 async function downloadPDF(){
   var btn=$('pdfBtn');if(btn){btn.textContent='Building PDF...';btn.disabled=true;}
-  var g=S.gsc,a=S.ga4;if(!g&&!a){if(btn){btn.textContent='Download PDF';btn.disabled=false;}return;}
+  var g=S.gsc,a=S.ga4;if(!g&&!a){if(btn){btn.textContent='PDF';btn.disabled=false;}return;}
   var {jsPDF}=window.jspdf;
   var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   var pw=210,ph=297,mg=14,y=mg,lh=5.5;
@@ -562,7 +837,7 @@ async function downloadPDF(){
   function ptColor(type){return type==='state'?[93,173,226]:type==='news'?AMBER:type==='bofu'?GRN:type==='casino'?PINK:type==='social'?[155,89,182]:MID;}
   doc.setFillColor(BLACK[0],BLACK[1],BLACK[2]);doc.rect(0,0,pw,ph,'F');
   doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.roundedRect(mg,y,pw-mg*2,22,2,2,'F');
-  sf(16,true,BLACK);doc.text('casinos.com SEO Dashboard v2.2',mg+8,y+9);
+  sf(16,true,BLACK);doc.text('casinos.com SEO Dashboard v2.3',mg+8,y+9);
   var dateStr=g?(g.ds?fdate(g.ds)+' \u2013 '+fdate(g.de):g.dateRange):'';
   sf(7,false,BLACK);doc.text(dateStr,pw-mg-2,y+9,{align:'right'});
   sf(6,false,BLACK);doc.text('Generated '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),pw-mg-2,y+14,{align:'right'});
@@ -592,18 +867,15 @@ async function downloadPDF(){
     var topQ=g.queries.slice().sort(function(a,b){return b.li-a.li;}).slice(0,25);
     doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6,true,BLACK);doc.text('Query',mg+2,y);doc.text('Impr.',mg+95,y,{align:'right'});doc.text('Clicks',mg+113,y,{align:'right'});doc.text('CTR',mg+127,y,{align:'right'});doc.text('Pos.',mg+143,y,{align:'right'});doc.text('Chg',pw-mg-2,y,{align:'right'});y+=lh;
     topQ.forEach(function(q,i){cp(6);var d=q.pp>0&&q.lp>0?q.pp-q.lp:null;doc.setFillColor(i%2===0?22:28,i%2===0?22:28,i%2===0?22:28);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6.5,false,WHITE);doc.text(q.key.slice(0,55),mg+2,y);sf(6.5,false,MID);doc.text(q.li.toLocaleString(),mg+95,y,{align:'right'});sf(6.5,false,q.lc>0?WHITE:MID);doc.text(String(q.lc),mg+113,y,{align:'right'});sf(6.5,false,MID);doc.text(q.lctr,mg+127,y,{align:'right'});sf(6.5,false,q.lp>0&&q.lp<=3?PINK:q.lp<=10?GRN:MID);doc.text(q.lp>0?q.lp.toFixed(1):'\u2014',mg+143,y,{align:'right'});if(d!=null){sf(6.5,true,d>0?GRN:d<0?RED:MID);doc.text((d>0?'+':'')+d.toFixed(1),pw-mg-2,y,{align:'right'});}y+=lh;});
-    var oppsQ=g.queries.filter(function(q){return q.li>100&&q.lp>10&&q.lp<=20&&parseFloat(q.lctr)<3;}).sort(function(a,b){return b.li-a.li;}).slice(0,20);
-    if(oppsQ.length){cp(20);secHead('KEYWORD OPPORTUNITIES [GSC]');doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6,true,BLACK);doc.text('Query',mg+2,y);doc.text('Impr.',mg+95,y,{align:'right'});doc.text('Pos.',mg+115,y,{align:'right'});doc.text('Chg',mg+133,y,{align:'right'});doc.text('Clicks',mg+148,y,{align:'right'});doc.text('CTR',pw-mg-2,y,{align:'right'});y+=lh;
-    oppsQ.forEach(function(q,i){cp(6);var d=q.pp>0&&q.lp>0?q.pp-q.lp:null;doc.setFillColor(i%2===0?22:28,i%2===0?22:28,i%2===0?22:28);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6.5,false,WHITE);doc.text(q.key.slice(0,55),mg+2,y);sf(6.5,false,MID);doc.text(q.li.toLocaleString(),mg+95,y,{align:'right'});sf(6.5,false,AMBER);doc.text(q.lp>0?q.lp.toFixed(1):'\u2014',mg+115,y,{align:'right'});if(d!=null){sf(6.5,true,d>0?GRN:d<0?RED:MID);doc.text((d>0?'+':'')+d.toFixed(1),mg+133,y,{align:'right'});}sf(6.5,false,WHITE);doc.text(String(q.lc),mg+148,y,{align:'right'});sf(6.5,false,MID);doc.text(q.lctr,pw-mg-2,y,{align:'right'});y+=lh;});}
   }
   if(S.ta){
     np();secHead('AI TAKEAWAYS');
     S.ta.split(/^## /m).filter(Boolean).forEach(function(sec){var parts=sec.split('\n'),title=parts[0].trim(),body=parts.slice(1).join('\n').trim();cp(18);doc.setFillColor(GREY[0],GREY[1],GREY[2]);doc.roundedRect(mg,y,pw-mg*2,9,1,1,'F');doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.roundedRect(mg,y,2,9,1,1,'F');sf(7.5,true,PINK);doc.text(title,mg+5,y+6);y+=11;var wrapped=doc.splitTextToSize(body,pw-mg*2-4);sf(6.5,false,[180,180,180]);for(var li3=0;li3<Math.min(wrapped.length,8);li3++){cp(lh+1);doc.text(wrapped[li3],mg+3,y);y+=lh;}y+=4;});
   }
   var nPages=doc.internal.getNumberOfPages();
-  for(var pg=1;pg<=nPages;pg++){doc.setPage(pg);doc.setFillColor(20,20,20);doc.rect(0,ph-8,pw,8,'F');sf(5.5,false,[60,60,60]);doc.text('casinos.com SEO Dashboard v2.2 \u2014 Confidential',mg,ph-3);doc.text('Page '+pg+' of '+nPages,pw-mg,ph-3,{align:'right'});}
+  for(var pg=1;pg<=nPages;pg++){doc.setPage(pg);doc.setFillColor(20,20,20);doc.rect(0,ph-8,pw,8,'F');sf(5.5,false,[60,60,60]);doc.text('casinos.com SEO Dashboard v2.3 \u2014 Confidential',mg,ph-3);doc.text('Page '+pg+' of '+nPages,pw-mg,ph-3,{align:'right'});}
   doc.save('casinos-seo-'+new Date().toISOString().split('T')[0]+'.pdf');
-  if(btn){btn.innerHTML='<svg viewBox="0 0 16 16" style="width:13px;height:13px;fill:currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zm-5 2h10v1.5H3V14z"/></svg> Download PDF';btn.disabled=false;}
+  if(btn){btn.innerHTML='<svg viewBox="0 0 16 16" style="width:13px;height:13px;fill:currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zm-5 2h10v1.5H3V14z"/></svg> PDF';btn.disabled=false;}
 }
 window.downloadPDF=downloadPDF;
 renderUpload();
