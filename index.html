@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Casinos.com — SEO Dashboard v2.3</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%23E91E8C'/%3E%3Cpath d='M18 4C18 4 20 13 26 18C20 23 18 32 18 32C18 32 16 23 10 18C16 13 18 4 18 4ZM4 18C4 18 13 16 18 10C23 16 32 18 32 18C32 18 23 20 18 26C13 20 4 18 4 18Z' fill='white'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -128,7 +129,7 @@ function getDates(rangeKey){
   var days=r.days,end=fmt(today),start=fmt(new Date(today.getTime()-days*86400000)),pEnd=fmt(new Date(today.getTime()-(days+1)*86400000)),pStart=fmt(new Date(today.getTime()-(days*2+1)*86400000));
   return{startDate:start,endDate:end,prevStartDate:pStart,prevEndDate:pEnd};
 }
-var GA4_PROPS={all:'340682665',global:'340682665',us:'340682665',ca:'395120251',ie:'395169855',nz:'395143837',it:'417387159',uk:'395132493',row:'395176605'};
+var GA4_PROPS={all:'340682665',global:'340682665',gx:'340682665',us:'395155886',ca:'395120251',ie:'395169855',nz:'395143837',it:'417387159',uk:'395132493',row:'395176605'};
 function matchMarket(url,marketKey){
   if(!url)return false;
   if(marketKey==='all')return true;
