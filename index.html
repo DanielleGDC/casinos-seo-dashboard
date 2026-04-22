@@ -95,15 +95,22 @@ var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market
   kwSearch:'',kwActiveUrl:null};
 var MARKETS={
   all:   {label:'All markets',       prefix:null},
-  global:{label:'\uD83C\uDF0D Global / GX',    prefix:null, noPrefix:true},
+  gx:    {label:'\uD83C\uDF0D GX / Global',    prefix:null, gx:true},
   us:    {label:'\uD83C\uDDFA\uD83C\uDDF8 United States', prefix:'/us/'},
   ca:    {label:'\uD83C\uDDE8\uD83C\uDDE6 Canada',        prefix:'/ca/'},
   uk:    {label:'\uD83C\uDDEC\uD83C\uDDE7 United Kingdom',prefix:'/uk/'},
   ie:    {label:'\uD83C\uDDEE\uD83C\uDDEA Ireland',       prefix:'/ie/'},
   it:    {label:'\uD83C\uDDEE\uD83C\uDDF9 Italy',         prefix:'/it/'},
   nz:    {label:'\uD83C\uDDF3\uD83C\uDDFF New Zealand',   prefix:'/nz/'},
-  row:   {label:'\uD83C\uDF10 Rest of World',  prefix:null, noPrefix:true}
+  row:   {label:'\uD83C\uDF10 Rest of World',  prefix:null, gx:true}
 };
+// GX = any page path with NO known geo prefix (e.g. /destinations, /best-sites, /us is the US root not GX)
+// A path is GX if it doesn't start with /us/, /ca/, /uk/, /ie/, /it/, /nz/
+function isGXPage(url) {
+  if(!url) return false;
+  var p = url.toLowerCase().replace(/^https?:\/\/[^/]+/, '');
+  return !KNOWN_PREFIXES.some(function(pfx){ return p === pfx.slice(0,-1) || p.indexOf(pfx) === 0; });
+}
 var KNOWN_PREFIXES=['/us/','/ca/','/uk/','/ie/','/it/','/nz/'];
 var DATE_RANGES={
   '7d':  {label:'Last 7 days',   days:7},
@@ -123,9 +130,13 @@ function getDates(rangeKey){
 }
 var GA4_PROPS={all:'340682665',global:'340682665',us:'340682665',ca:'395120251',ie:'395169855',nz:'395143837',it:'417387159',uk:'395132493',row:'395176605'};
 function matchMarket(url,marketKey){
-  if(!url)return false;var m=MARKETS[marketKey];if(!m)return true;if(marketKey==='all')return true;
-  if(m.noPrefix){var s=url.toLowerCase();return !KNOWN_PREFIXES.some(function(p){return s.indexOf(p)>=0;});}
-  if(!m.prefix)return true;return url.toLowerCase().indexOf(m.prefix)>=0;
+  if(!url)return false;
+  if(marketKey==='all')return true;
+  var m=MARKETS[marketKey];if(!m)return true;
+  // GX / global / row = pages with NO geo prefix
+  if(m.gx) return isGXPage(url);
+  if(!m.prefix)return true;
+  return url.toLowerCase().indexOf(m.prefix)===0||url.toLowerCase().indexOf(m.prefix)>=0;
 }
 var CH={},ROOT=document.getElementById('root');
 var STAR='<svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg>';
@@ -157,6 +168,20 @@ function getPageType(url){
   return'other';
 }
 var PTC={state:{label:'State',color:'#5DADE2',bg:'rgba(93,173,226,.15)'},news:{label:'News',color:'#F39C12',bg:'rgba(243,156,18,.15)'},bofu:{label:'BOFU',color:'#27AE60',bg:'rgba(39,174,96,.15)'},casino:{label:'Casino',color:'#E91E8C',bg:'rgba(233,30,140,.15)'},social:{label:'Social',color:'#9B59B6',bg:'rgba(155,89,182,.15)'},other:{label:'Other',color:'#888',bg:'rgba(136,136,136,.12)'}};
+// Normalize GA4's page_type dimension values to our internal type keys
+// GA4 exports may use different casing/naming than our internal keys
+function normalizeGA4PageType(raw) {
+  if(!raw) return null;
+  var r = raw.toLowerCase().trim();
+  if(r==='money page'||r==='moneypage'||r==='money_page') return 'bofu';
+  if(r==='news'||r==='article'||r==='blog') return 'news';
+  if(r==='casino'||r==='casino info'||r==='casino brand'||r==='casino_info') return 'casino';
+  if(r==='bofu'||r==='bottom of funnel'||r==='commercial') return 'bofu';
+  if(r==='state'||r==='state page'||r==='geo') return 'state';
+  if(r==='social'||r==='social casino') return 'social';
+  if(r==='other'||r==='informational') return 'other';
+  return null;
+}
 function ptBadge(type){var c=PTC[type]||PTC.other;return'<span class="pt-badge" style="color:'+c.color+';background:'+c.bg+'">'+c.label+'</span>';}
 var LEGEND='<div class="chart-legend"><div class="legend-item"><div class="legend-swatch" style="background:rgba(255,255,255,.15)"></div>Previous</div><div class="legend-item"><div class="legend-swatch" style="background:#E91E8C"></div>Improved</div><div class="legend-item"><div class="legend-swatch" style="background:#E05C3A"></div>Declined</div></div>';
 function getCols(f){var a=function(k){return f.filter(function(x){return x.toLowerCase().indexOf(k)>=0;});};var cl=a('click'),im=a('impression'),po=a('position'),ct=a('ctr');return{lc:cl[0]||'',pc:cl[1]||'',li:im[0]||'',pi:im[1]||'',lp:po[0]||'',pp:po[1]||'',lctr:ct[0]||''};}
@@ -173,7 +198,10 @@ function parseGA4CSV(text){
   var hasCmp=flds.some(function(f){return f.toLowerCase().indexOf('comparison')>=0;});
   function cmpCol(base){var c=[base+' (comparison period)',base+' (previous period)'];for(var i=0;i<c.length;i++)if(flds.indexOf(c[i])>=0)return c[i];return null;}
   var vC=cmpCol('Views'),keC=cmpCol('Key events');
-  var rows=r.data.map(function(row){return{page:row[pk]||'',pageType:row['page_type']||'',views:+row['Views']||0,users:+row['Active users']||0,engTime:parseFloat(row['Average engagement time per active user'])||0,keyEvents:+row['Key events']||0,viewsPrev:vC?+row[vC]||0:0,keyEventsPrev:keC?+row[keC]||0:0,hasComparison:hasCmp&&vC!==null};}).filter(function(r){return r.page;});
+  var rows=r.data.map(function(row){
+    var rawPageType=row['page_type']||row['Page type']||row['pageType']||'';
+    var normalizedType=normalizeGA4PageType(rawPageType);
+    return{page:row[pk]||'',pageType:normalizedType||'',ga4PageType:rawPageType,views:+row['Views']||0,users:+row['Active users']||0,engTime:parseFloat(row['Average engagement time per active user'])||0,keyEvents:+row['Key events']||0,viewsPrev:vC?+row[vC]||0:0,keyEventsPrev:keC?+row[keC]||0:0,hasComparison:hasCmp&&vC!==null};}).filter(function(r){return r.page;});
   var pageCount={};rows.forEach(function(r){pageCount[r.page]=(pageCount[r.page]||0)+1;});
   var hasDupeRows=Object.values(pageCount).some(function(c2){return c2>1;});
   var finalRows=rows;
@@ -235,12 +263,11 @@ function barChart(id,labels,datasets){setTimeout(function(){var el=$(id);if(!el)
 function tabOverview(){
   var g=S.gsc,a=S.ga4,mktKey=S.market||'all';
   var filteredPages=g?g.pages.filter(function(p){return matchMarket(p.key,mktKey);}):[];
-  if(a)a.rows.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'';});
-  var geoMkts=['ca','uk','ie','it','nz','row'];
-  var isGeoMkt=geoMkts.indexOf(mktKey)>=0;
+  if(a)a.rows.forEach(function(r){
+    if(!r.pageType) r.pageType = normalizeGA4PageType(r.ga4PageType) || getPageType(r.page) || 'other';
+  });
   var filteredGA4=a?a.rows.filter(function(r){
-    if(isGeoMkt||mktKey==='all'||mktKey==='global')return true;
-    return matchMarket(r.page,mktKey);
+    return getGA4FilteredRows([r], mktKey).length > 0;
   }):[];
   var lc=0,pc=0,li=0,pi=0;filteredPages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});
   if(!filteredPages.length&&!filteredGA4.length){$('tc').innerHTML='<div class="empty" style="padding:40px">No data for this market.</div>';return;}
@@ -254,7 +281,7 @@ function tabOverview(){
   var topKE=m.slice().sort(function(a,b){return b.keyEvents-a.keyEvents;}).slice(0,8);
   var pd=gn.concat(dc2).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,14);
   var cH=pd.length?Math.max(320,pd.length*40+80):0;
-  var html='<div class="g4">'+mkMC('Clicks [GSC]',fmt(lc),hasCmp?(cd>=0?'\u2191 ':'\u2193 ')+Math.abs(cd)+'% vs prev':'',hasCmp?(cd>=0?'#27AE60':'#E05C3A'):'#555',g&&g.ds?drange(g.ds,g.de):g?g.dateRange:'')+mkMC('Impressions [GSC]',fmt(li),hasCmp?(id2>=0?'\u2191 ':'\u2193 ')+Math.abs(id2)+'% vs prev':'',hasCmp?(id2>=0?'#27AE60':'#E05C3A'):'#555')+mkMC('GA4 Views',totV>0?fmt(totV):'\u2014',hasCmpG&&totVP>0?(vDiff>=0?'\u2191 ':'\u2193 ')+Math.abs(vDiff)+'% vs prev':'Money pages',hasCmpG&&totVP>0?(vDiff>=0?'#27AE60':'#E05C3A'):'#888',a&&a.ds?drange(a.ds,a.de):'')+mkMC('Exit Clicks [GA4]',totKE>0?fmt(totKE):'\u2014',hasCmpG&&totKEP>0?(kDiff>=0?'\u2191 ':'\u2193 ')+Math.abs(kDiff)+'% vs prev':'exit_click_goal',hasCmpG&&totKEP>0?(kDiff>=0?'#27AE60':'#E05C3A'):'#888')+'</div>';
+  var html='<div class="g4">'+mkMC('Clicks [GSC]',fmt(lc),hasCmp?(cd>=0?'\u2191 ':'\u2193 ')+Math.abs(cd)+'% vs prev':'',hasCmp?(cd>=0?'#27AE60':'#E05C3A'):'#555',g&&g.ds?drange(g.ds,g.de):g?g.dateRange:'')+mkMC('Impressions [GSC]',fmt(li),hasCmp?(id2>=0?'\u2191 ':'\u2193 ')+Math.abs(id2)+'% vs prev':'',hasCmp?(id2>=0?'#27AE60':'#E05C3A'):'#555')+mkMC('GA4 Views',totV>0?fmt(totV):'\u2014',hasCmpG&&totVP>0?(vDiff>=0?'\u2191 ':'\u2193 ')+Math.abs(vDiff)+'% vs prev':'Money pages',hasCmpG&&totVP>0?(vDiff>=0?'#27AE60':'#E05C3A'):'#888',a&&a.ds?drange(a.ds,a.de):'')+mkMC('Exit Click Goal \u2713',totKE>0?fmt(totKE):'\u2014',hasCmpG&&totKEP>0?(kDiff>=0?'\u2191 ':'\u2193 ')+Math.abs(kDiff)+'% vs prev':'exit_click_goal',hasCmpG&&totKEP>0?(kDiff>=0?'#27AE60':'#E05C3A'):'#888')+'</div>';
   if(pd.length)html+='<div class="card"><div class="sec">Position movement [GSC] \u2014 '+(g.ds?drange(g.ds,g.de):g.dateRange)+(hasCmp?' vs prev':'')+'</div>'+LEGEND+'<div style="height:'+cH+'px"><canvas id="cOv"></canvas></div></div>';
   html+='<div class="g2"><div class="card"><div class="sec">Top position gainers [GSC]</div>';
   if(gn.length)gn.forEach(function(p){var d=p.pp-p.lp;html+='<div class="pr"><div class="pg" title="'+esc(slug(p.key))+'">'+esc(slug(p.key))+'</div><div class="vv">'+p.pp.toFixed(0)+'\u2192'+p.lp.toFixed(0)+'</div><div class="dv" style="color:#27AE60">+'+d.toFixed(1)+'</div></div>';});
@@ -302,20 +329,37 @@ function rPos(){
 var GEO_MKTS=['ca','uk','ie','it','nz','row'];
 
 function getGA4FilteredRows(allRows, mktKey) {
-  // Geo-specific markets: live data already comes from that market's GA4 property,
-  // so skip path filtering (it would break since paths don't carry geo prefix)
-  if(GEO_MKTS.indexOf(mktKey) >= 0) return allRows;
-  // "all" or "global" — show everything
-  if(mktKey === 'all' || mktKey === 'global') return allRows;
-  // US market: include rows that match /us/ OR rows that have no known geo prefix
-  if(mktKey === 'us') {
-    return allRows.filter(function(r) {
-      var p = (r.page || '').toLowerCase();
-      return p.indexOf('/us/') >= 0 || !KNOWN_PREFIXES.some(function(pfx) { return p.indexOf(pfx) >= 0; });
+  if(mktKey === 'all') return allRows;
+
+  // GX / global = pages with NO geo prefix in path
+  if(mktKey === 'gx' || mktKey === 'global' || (MARKETS[mktKey] && MARKETS[mktKey].gx)) {
+    return allRows.filter(function(r){ return isGXPage(r.page); });
+  }
+
+  // Specific geo with a known prefix (us, ca, uk, ie, it, nz)
+  var m = MARKETS[mktKey];
+  if(m && m.prefix) {
+    return allRows.filter(function(r){
+      var p = (r.page||'').toLowerCase().replace(/^https?:\/\/[^/]+/,'');
+      // exact root match like /us or /ca, OR starts with /us/ or /ca/
+      return p === m.prefix.slice(0,-1) || p.indexOf(m.prefix) === 0;
     });
   }
-  // Any other market with a prefix
-  return allRows.filter(function(r) { return matchMarket(r.page, mktKey); });
+
+  // For geo-specific live data properties loaded by n8n (the data is already geo-scoped)
+  // Check if the rows have geo paths - if yes, filter; if no, assume all data is for this market
+  if(GEO_MKTS.indexOf(mktKey) >= 0) {
+    var hasPrefixedRows = allRows.some(function(r){
+      return KNOWN_PREFIXES.some(function(pfx){ return (r.page||'').indexOf(pfx) >= 0; });
+    });
+    if(hasPrefixedRows) {
+      return allRows.filter(function(r){ return matchMarket(r.page, mktKey); });
+    }
+    // No geo prefixes in data = geo-specific property, show everything
+    return allRows;
+  }
+
+  return allRows;
 }
 
 function tabGA4(){
@@ -324,8 +368,13 @@ function tabGA4(){
   var dr=a.ds?drange(a.ds,a.de):'';
   var prevStr=hasCmp&&a.dsPrev?drange(a.dsPrev,a.dePrev):'';
 
-  // Ensure page types set on all rows
-  a.rows.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'other';});
+  // Ensure page types set on all rows - prefer GA4 dimension, fall back to URL
+  a.rows.forEach(function(r){
+    if(!r.pageType){
+      var fromUrl=getPageType(r.page)||'other';
+      r.pageType=fromUrl;
+    }
+  });
 
   var mktKey=S.market||'all';
   var mktRows=getGA4FilteredRows(a.rows, mktKey);
@@ -340,31 +389,37 @@ function tabGA4(){
   var ptSel=PT_SEL.replace('id="PFXPT"','id="g_pt"');
 
   // Period banner
+  var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
   var periodBanner='<div style="background:#1A1A1A;border:1px solid #2a2a2a;border-radius:11px;padding:10px 16px;margin-bottom:12px">';
+  periodBanner+='<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:space-between">';
+  periodBanner+='<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">';
   if(hasCmp && dr && prevStr){
-    periodBanner+='<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">';
     periodBanner+='<div style="display:flex;align-items:center;gap:8px"><div style="width:20px;height:8px;background:#E91E8C;border-radius:2px"></div><div><div style="font-size:11px;font-weight:600;color:#F0F0F0">Current</div><div style="font-size:10px;color:#888">'+esc(dr)+'</div></div></div>';
     periodBanner+='<div style="display:flex;align-items:center;gap:8px"><div style="width:20px;height:8px;background:rgba(255,255,255,.15);border-radius:2px;border:1px solid #444"></div><div><div style="font-size:11px;color:#888">Previous</div><div style="font-size:10px;color:#555">'+esc(prevStr)+'</div></div></div>';
-    periodBanner+='</div>';
   } else {
     periodBanner+='<div style="font-size:10px;color:#888">Period: <span style="color:#F0F0F0;font-weight:600">'+esc(dr||'Loaded data')+'</span></div>';
   }
   periodBanner+='</div>';
+  // Geo + key event badge
+  periodBanner+='<div style="display:flex;gap:8px;align-items:center">';
+  periodBanner+='<span style="background:rgba(233,30,140,.1);border:1px solid rgba(233,30,140,.25);border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;color:#E91E8C">'+esc(mktLabel)+'</span>';
+  periodBanner+='<span style="background:rgba(39,174,96,.1);border:1px solid rgba(39,174,96,.25);border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;color:#27AE60">Key event: exit_click_goal</span>';
+  periodBanner+='</div></div></div>';
 
   // Metric cards
   var metricsHtml='<div id="gm" class="g4">'
     +mkMC('Total Views [GA4]',fmt(totV),
       vd!==null?(vd>=0?'\u2191 '+Math.abs(vd)+'% vs prev':'\u2193 '+Math.abs(vd)+'% vs prev'):'All pages',
       vd!==null?(vd>=0?'#27AE60':'#E05C3A'):'#888', dr)
-    +mkMC('Exit Click Goals',fmt(totKE),
-      kd!==null?(kd>=0?'\u2191 '+Math.abs(kd)+'% vs prev':'\u2193 '+Math.abs(kd)+'% vs prev'):'exit_click_goal events',
+    +mkMC('Exit Click Goal \u2713',fmt(totKE),
+      kd!==null?(kd>=0?'\u2191 '+Math.abs(kd)+'% vs prev':'\u2193 '+Math.abs(kd)+'% vs prev'):'exit_click_goal key event',
       kd!==null?(kd>=0?'#27AE60':'#E05C3A'):'#E91E8C')
-    +mkMC('Avg Conv. Rate',totV>0?(totKE/totV*100).toFixed(2)+'%':'\u2014','Exit clicks \u00f7 views','#888')
+    +mkMC('Avg Conv. Rate',totV>0?(totKE/totV*100).toFixed(2)+'%':'\u2014','Exit click goals \u00f7 views','#888')
     +mkMC('Pages',String(mktRows.length),'Matching market filter','#555')
     +'</div>';
 
   $('tc').innerHTML=metricsHtml+periodBanner
-    +'<div class="card"><div class="sec">Exit Click Goals — top 10 pages</div><div style="height:185px"><canvas id="cG4"></canvas></div></div>'
+    +'<div class="card"><div class="sec">Exit Click Goal (exit_click_goal) — top 10 pages</div><div style="height:185px"><canvas id="cG4"></canvas></div></div>'
     +mkFbar('g_','Filter by page URL...',
       [{v:'all',l:'All pages'},{v:'money',l:'Money pages only'}],
       [{v:'views',l:'\u2193 Most views'},{v:'ke',l:'\u2193 Exit clicks'},{v:'conv',l:'\u2193 Highest conv.'},{v:'lowconv',l:'\u2191 Lowest conv.'},{v:'eng',l:'\u2193 Engaged'}],
@@ -380,7 +435,11 @@ function rGA4(){
   var v=fbarVals('g_'),hasCmp=a.hasComparison;
   var mktKey=S.market||'all';
 
-  a.rows.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'other';});
+  a.rows.forEach(function(r){
+    if(!r.pageType){
+      r.pageType = normalizeGA4PageType(r.ga4PageType) || getPageType(r.page) || 'other';
+    }
+  });
 
   // Apply market filter first
   var src=getGA4FilteredRows(a.rows, mktKey);
@@ -423,10 +482,10 @@ function rGA4(){
     mkMC('Total Views [GA4]',fmt(totV),
       vd!==null?(vd>=0?'\u2191 '+Math.abs(vd)+'% vs prev':'\u2193 '+Math.abs(vd)+'% vs prev'):'Filtered set',
       vd!==null?(vd>=0?'#27AE60':'#E05C3A'):'#888', a.ds?drange(a.ds,a.de):'')
-    +mkMC('Exit Click Goals',fmt(totKE),
-      kd!==null?(kd>=0?'\u2191 '+Math.abs(kd)+'% vs prev':'\u2193 '+Math.abs(kd)+'% vs prev'):'exit_click_goal events',
+    +mkMC('Exit Click Goal \u2713',fmt(totKE),
+      kd!==null?(kd>=0?'\u2191 '+Math.abs(kd)+'% vs prev':'\u2193 '+Math.abs(kd)+'% vs prev'):'exit_click_goal key event',
       kd!==null?(kd>=0?'#27AE60':'#E05C3A'):'#E91E8C')
-    +mkMC('Avg Conv. Rate',totV>0?(totKE/totV*100).toFixed(2)+'%':'\u2014','Exit clicks \u00f7 views','#888')
+    +mkMC('Avg Conv. Rate',totV>0?(totKE/totV*100).toFixed(2)+'%':'\u2014','Exit click goals \u00f7 views','#888')
     +mkMC('Pages',String(src.length),'Matching filter','#555');
 
   // Build table
@@ -441,11 +500,11 @@ function rGA4(){
 
   var thead='<tr>'
     +'<th>Type</th>'
-    +'<th>Page URL</th>'
+    +'<th>Page URL — '+esc(MARKETS[mktKey]?MARKETS[mktKey].label:mktKey)+'</th>'
     +'<th class="r">Views</th>'
     +(hasCmp?'<th class="r">Views prev</th><th class="r">\u0394 Views</th>':'')
-    +'<th class="r">Exit Clicks</th>'
-    +(hasCmp?'<th class="r">Exit Cl. prev</th><th class="r">\u0394 Exit Cl.</th>':'')
+    +'<th class="r" style="color:#E91E8C">Exit Click Goal</th>'
+    +(hasCmp?'<th class="r">ECG prev</th><th class="r">\u0394 ECG</th>':'')
     +'<th class="r">Conv.%</th>'
     +'<th class="r">Eng. Time</th>'
     +'</tr>';
@@ -487,8 +546,8 @@ function rGA4(){
 
   // Update chart — exit clicks by top pages
   var top=src.slice(0,10);
-  var ds=[{label:'Exit Clicks',data:top.map(function(r){return r.keyEvents;}),backgroundColor:'#E91E8C',borderRadius:3}];
-  if(hasCmp) ds.unshift({label:'Exit Clicks (prev)',data:top.map(function(r){return r.keyEventsPrev||0;}),backgroundColor:'rgba(255,255,255,.1)',borderRadius:3});
+  var ds=[{label:'Exit Click Goal',data:top.map(function(r){return r.keyEvents;}),backgroundColor:'#E91E8C',borderRadius:3}];
+  if(hasCmp) ds.unshift({label:'Exit Click Goal (prev)',data:top.map(function(r){return r.keyEventsPrev||0;}),backgroundColor:'rgba(255,255,255,.1)',borderRadius:3});
   barChart('cG4',top.map(function(r){
     var p=r.page.replace(/^\/(us|ca|uk|ie|it|nz)\//,'').replace(/-/g,' ');
     return p.length>22?p.slice(0,20)+'\u2026':p;
