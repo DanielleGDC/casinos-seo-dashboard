@@ -940,6 +940,7 @@ window.runDecayReport=function(){
   var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
   var minClicks=S.decayMinClicks||20;
   var minPct=S.decayMinPct||15;
+  var isAllMarkets=mktKey==='all'||mktKey==='gx'||mktKey==='global';
 
   var pages=g.pages.filter(function(p){
     if(!matchMarket(p.key,mktKey))return false;
@@ -947,32 +948,65 @@ window.runDecayReport=function(){
   }).map(function(p){
     var pct=p.pc>0?(p.pc-p.lc)/p.pc*100:0;
     var posDrop=p.lp>0&&p.pp>0?p.lp-p.pp:0;
-    return{key:p.key.replace(/^https?:\/\/[^/]+/,''),type:getPageType(p.key),
-      clickDrop:p.pc-p.lc,pct:pct.toFixed(0),
-      prev:p.pc,curr:p.lc,posDrop:posDrop.toFixed(1),
-      imprPct:p.pi>0?((p.pi-p.li)/p.pi*100).toFixed(0):0};
-  }).sort(function(a,b){return(b.pct-a.pct)+(b.clickDrop-a.clickDrop);}).slice(0,20);
+    // Detect which market this page belongs to
+    var pageMkt='global';
+    var slug2=p.key.replace(/^https?:\/\/[^/]+/,'');
+    Object.keys(MARKETS).forEach(function(mk){
+      if(mk==='all'||mk==='gx'||mk==='global')return;
+      if(matchMarket(p.key,mk))pageMkt=MARKETS[mk].label;
+    });
+    return{
+      key:slug2,type:getPageType(p.key),market:pageMkt,
+      clickDrop:p.pc-p.lc,pct:Math.round(pct),
+      prev:p.pc,curr:p.lc,
+      posDrop:posDrop.toFixed(1),
+      imprPct:p.pi>0?Math.round((p.pi-p.li)/p.pi*100):0
+    };
+  }).sort(function(a,b){return b.pct-a.pct||b.clickDrop-a.clickDrop;}).slice(0,25);
 
   var critical=pages.filter(function(p){return p.pct>=50;});
   var high=pages.filter(function(p){return p.pct>=25&&p.pct<50;});
+  var medium=pages.filter(function(p){return p.pct<25;});
 
-  var prompt='You are a senior SEO analyst for casinos.com. Analyse this content decay data and provide a prioritised recovery plan.\n\n'
-    +'MARKET: '+mktLabel+'\nPERIOD: '+(g.ds?drange(g.ds,g.de):g.dateRange)+' vs previous\n\n'
-    +'CRITICAL DECAY (>50% click drop):\n'
-    +critical.map(function(p){return p.key+' | type:'+p.type+' | clicks:'+p.prev+'\u2192'+p.curr+' (-'+p.pct+'%) | pos change:'+p.posDrop+' | impr drop:'+p.imprPct+'%';}).join('\n')
-    +'\n\nHIGH DECAY (25-50% drop):\n'
-    +high.map(function(p){return p.key+' | type:'+p.type+' | clicks:'+p.prev+'\u2192'+p.curr+' (-'+p.pct+'%) | pos change:'+p.posDrop;}).join('\n')
-    +'\n\nOTHER DECAYING PAGES:\n'
-    +pages.filter(function(p){return p.pct<25;}).map(function(p){return p.key+' -'+p.pct+'%';}).join(', ')
-    +'\n\nFor each section, identify whether decay is caused by: ranking drops, CTR issues, content freshness, or algorithm updates.'
+  // Group by market for the "all markets" view
+  var mktGroups={};
+  if(isAllMarkets){
+    pages.forEach(function(p){
+      if(!mktGroups[p.market])mktGroups[p.market]=[];
+      mktGroups[p.market].push(p);
+    });
+  }
+
+  var prompt='You are a senior SEO analyst for casinos.com. Analyse this content decay data and provide a recovery plan.\n\n'
+    +'MARKET SCOPE: '+(isAllMarkets?'ALL MARKETS — group your analysis and recommendations BY MARKET (e.g. US, Italy, UK etc). Each recommendation must reference the specific market it applies to.':mktLabel+' ONLY — all analysis must be specific to the '+mktLabel+' market. Do not mention other markets.')+'\n'
+    +'PERIOD: '+(g.ds?drange(g.ds,g.de):g.dateRange)+' vs previous period\n\n';
+
+  if(isAllMarkets&&Object.keys(mktGroups).length>0){
+    prompt+='DECAY BY MARKET:\n';
+    Object.keys(mktGroups).forEach(function(mkt){
+      var mktPages=mktGroups[mkt];
+      prompt+='\n['+mkt+'] '+mktPages.length+' pages decaying:\n';
+      prompt+=mktPages.slice(0,8).map(function(p){
+        return'  '+p.key+' | clicks:'+p.prev+'\u2192'+p.curr+' (-'+p.pct+'%) | pos:'+p.posDrop+' | impr:-'+p.imprPct+'%';
+      }).join('\n');
+    });
+  } else {
+    prompt+='CRITICAL DECAY (>50% click drop):\n'
+      +critical.map(function(p){return p.key+' | type:'+p.type+' | clicks:'+p.prev+'\u2192'+p.curr+' (-'+p.pct+'%) | pos change:+'+p.posDrop+' | impr:-'+p.imprPct+'%';}).join('\n');
+    prompt+='\n\nHIGH DECAY (25-50% drop):\n'
+      +high.map(function(p){return p.key+' | clicks:'+p.prev+'\u2192'+p.curr+' (-'+p.pct+'%) | pos:+'+p.posDrop;}).join('\n');
+    if(medium.length)prompt+='\n\nMEDIUM DECAY:\n'+medium.map(function(p){return p.key+' -'+p.pct+'%';}).join(', ');
+  }
+
+  prompt+='\n\nFor each critical page identify the root cause: ranking drop, CTR issue, content freshness, or visibility loss.'
     +'\n\nReply with EXACTLY these sections:\n'
     +'## Decay Summary\n'
-    +'## Critical Pages — Immediate Action\n- [page: root cause + specific fix]\n'
-    +'## Pattern Analysis\n- [common themes across decaying pages]\n'
-    +'## Recovery Priority Order\n1. [page or group: action]\n2.\n3.\n4.\n5.\n'
+    +'## Critical Pages \u2014 Immediate Action\n- ['+(isAllMarkets?'market + ':'')+'page: root cause + specific fix]\n'
+    +'## Pattern Analysis\n- [patterns '+(isAllMarkets?'per market':'for '+mktLabel)+']\n'
+    +'## Recovery Priority Order\n1. ['+(isAllMarkets?'[market] ':'')+'page or group: action]\n2.\n3.\n4.\n5.\n'
     +'## What To Monitor';
 
-  fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})})
+  fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:prompt}]})})
   .then(function(r){return r.json();})
   .then(function(d){
     S.decayReport=d.content&&d.content.length>0?d.content.map(function(c){return c.text||'';}).join(''):(d.error?'Error: '+JSON.stringify(d.error):'No response');
