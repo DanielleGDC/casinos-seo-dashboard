@@ -1,46 +1,958 @@
-// Netlify serverless function — proxies requests to Anthropic API
-// Keeps the API key server-side so it's never exposed in the browser
-exports.handler = async function(event, context) {
-  // Only allow POST
-  if(event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
-  }
-
-  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-  if(!ANTHROPIC_API_KEY) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'ANTHROPIC_API_KEY not set in Netlify environment variables' })
-    };
-  }
-
-  try {
-    const body = JSON.parse(event.body);
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type':         'application/json',
-        'x-api-key':            ANTHROPIC_API_KEY,
-        'anthropic-version':    '2023-06-01'
-      },
-      body: JSON.stringify(body)
-    });
-
-    const data = await response.json();
-
-    return {
-      statusCode: response.status,
-      headers: {
-        'Content-Type':                 'application/json',
-        'Access-Control-Allow-Origin':  '*'
-      },
-      body: JSON.stringify(data)
-    };
-  } catch(err) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: err.message })
-    };
-  }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Casinos.com — SEO Dashboard v2.3</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect width='36' height='36' rx='8' fill='%231A1A1A'/%3E%3Crect x='4' y='20' width='6' height='12' rx='1.5' fill='%23E91E8C'/%3E%3Crect x='13' y='13' width='6' height='19' rx='1.5' fill='%23E91E8C'/%3E%3Crect x='22' y='6' width='6' height='26' rx='1.5' fill='%23E91E8C'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root{--pink:#E91E8C;--pinkd:#B0156A;--pinkl:rgba(233,30,140,.13);--pinkb:rgba(233,30,140,.25);--bg:#0E0E0E;--bg2:#1A1A1A;--bg3:#222;--bg4:#0A0A0A;--t:#F0F0F0;--tm:#888;--td:#555;--bdr:rgba(233,30,140,.18);--bdr2:rgba(255,255,255,.07);--grn:#27AE60;--red:#E05C3A;--amb:#D4882A;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--t);font-size:13px}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:#333;border-radius:3px}::-webkit-scrollbar-track{background:var(--bg2)}
+input,select{height:33px;border:1px solid #333;border-radius:7px;padding:0 10px;background:var(--bg2);color:var(--t);font-size:12px;font-family:inherit;outline:none}
+input:focus{border-color:var(--pink)}
+select{padding:0 22px 0 9px;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+button{font-family:inherit;cursor:pointer;border:1px solid #333;border-radius:7px;padding:5px 13px;font-size:12px;background:var(--bg2);color:var(--tm);transition:.15s}
+button:hover{border-color:var(--pink);color:var(--pink)}
+.bp{background:var(--pink);color:#fff;border-color:var(--pink);font-weight:700;padding:11px 28px;font-size:14px;border-radius:8px}
+.bp:hover{background:var(--pinkd);color:#fff;border-color:var(--pinkd)}.bp:disabled{opacity:.45;cursor:default}
+.topbar{background:var(--bg4);border-bottom:1px solid var(--pinkb);height:50px;display:flex;align-items:center;padding:0 16px;gap:10px;position:sticky;top:0;z-index:100}
+.lm{width:34px;height:34px;background:var(--pink);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.lm svg{width:18px;height:18px}.ln{font-size:13px;font-weight:700;color:var(--pink)}.ls{font-size:9px;color:var(--tm);text-transform:uppercase;letter-spacing:.06em;display:block;margin-top:-1px}
+.dp{background:var(--bg2);border:1px solid #333;border-radius:20px;padding:3px 10px;font-size:10px;color:var(--tm);white-space:nowrap;display:flex;align-items:center;gap:5px}
+.dd{width:6px;height:6px;border-radius:50%;background:var(--pink);flex-shrink:0}
+.cmp-pill{background:rgba(255,255,255,.07);border:1px solid #444;border-radius:20px;padding:2px 8px;font-size:9px;color:#aaa;font-weight:600;white-space:nowrap}
+.mkt-select{height:28px;border:1px solid var(--pinkb);border-radius:20px;padding:0 24px 0 10px;background:rgba(233,30,140,.1);color:var(--pink);font-size:11px;font-weight:700;font-family:inherit;outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23E91E8C'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.mkt-select:hover{background-color:rgba(233,30,140,.2)}
+.tabnav{background:var(--bg4);border-bottom:1px solid #222;display:flex;padding:0 16px;position:sticky;top:50px;z-index:99;overflow-x:auto}
+.tabnav::-webkit-scrollbar{height:0}
+.tb{padding:9px 13px;font-size:12px;cursor:pointer;background:transparent;border:none;color:var(--tm);border-bottom:2px solid transparent;white-space:nowrap;transition:.15s}
+.tb.on{color:var(--pink);font-weight:700;border-bottom-color:var(--pink)}
+.main{padding:14px;max-width:1400px;margin:0 auto}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.card{background:var(--bg2);border:1px solid #222;border-radius:11px;padding:14px;margin-bottom:14px}
+.sec{font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+.mc{background:var(--bg3);border:1px solid #2a2a2a;border-radius:11px;padding:13px 15px}
+.mc .lb{font-size:10px;color:var(--tm);margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em}
+.mc .vl{font-size:21px;font-weight:700}.mc .sb{font-size:10px;margin-top:4px}.mc .dt{font-size:9px;color:var(--td);margin-top:2px}
+.tbl{border:1px solid #222;border-radius:11px;overflow:hidden;max-height:600px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:11px}thead{position:sticky;top:0;z-index:2}
+th{padding:8px 10px;background:#111;color:#aaa;font-size:9px;font-weight:700;text-align:left;white-space:nowrap;border-bottom:1px solid #2a2a2a;text-transform:uppercase;letter-spacing:.05em}
+th.r,td.r{text-align:right}
+td{padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+td.mono{font-family:monospace;font-size:10px;color:var(--tm)}
+td.url-cell{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+tr:hover td{background:rgba(255,255,255,.03)}
+.pr{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.pr .pg{flex:1;font-family:monospace;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tm)}
+.pr .vv{font-size:10px;color:var(--td)}.pr .dv{font-size:10px;font-weight:700;min-width:34px;text-align:right}
+.fb{background:var(--bg2);border:1px solid #222;border-radius:11px;padding:10px 13px;margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fb .cnt{font-size:10px;color:var(--td);margin-left:auto;white-space:nowrap}
+.tab-box{border-left:3px solid;padding:12px 15px;margin-bottom:10px;border-radius:0 9px 9px 0}
+.tab-h{font-size:11px;font-weight:700;margin-bottom:5px}.tab-b{font-size:12px;line-height:1.75;white-space:pre-wrap}
+.chart-legend{display:flex;gap:16px;font-size:10px;color:var(--tm);margin-bottom:8px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:5px}.legend-swatch{width:24px;height:8px;border-radius:2px;flex-shrink:0}
+.pt-badge{display:inline-block;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;vertical-align:middle;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.url-btn{background:transparent;border:none;color:#888;cursor:pointer;font-family:monospace;font-size:10px;text-align:left;padding:0;text-decoration:underline;text-decoration-color:rgba(136,136,136,.4);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;transition:.1s}
+.url-btn:hover{color:var(--pink);text-decoration-color:var(--pink)}
+.url-btn.active{color:var(--pink);text-decoration-color:var(--pink)}
+.kw-url-filter{display:flex;align-items:center;gap:6px;background:rgba(233,30,140,.08);border:1px solid rgba(233,30,140,.25);border-radius:8px;padding:5px 10px;margin-bottom:10px}
+.kw-url-filter span{font-size:10px;color:#888}
+.kw-url-filter code{font-size:10px;color:var(--pink);font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kw-url-filter button{background:transparent;border:none;color:#555;font-size:14px;cursor:pointer;padding:0 2px;line-height:1}
+.kw-url-filter button:hover{color:var(--red)}
+.exit-clicks-highlight{background:rgba(233,30,140,.08);border:1px solid rgba(233,30,140,.2);border-radius:7px;padding:2px 7px}
+.up{max-width:600px;margin:0 auto;padding:40px 20px}
+.ulogo{width:64px;height:64px;background:var(--pink);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+.ulogo svg{width:34px;height:34px}
+.dz{border:2px dashed #333;border-radius:11px;padding:28px 20px;text-align:center;cursor:pointer;background:rgba(255,255,255,.02);transition:.15s;margin-bottom:10px}
+.dz:hover,.dz.drag{border-color:var(--pink);background:rgba(233,30,140,.06)}
+.fi{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3);border-radius:7px;margin-bottom:4px;border:1px solid #2a2a2a}
+.ftag{font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;flex-shrink:0}
+.fn{flex:1;font-size:11px;color:var(--tm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.finfo{font-size:9px;color:var(--td);white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis}
+.fst{font-size:10px;white-space:nowrap;flex-shrink:0}
+.frm{background:transparent;border:none;color:var(--td);font-size:14px;cursor:pointer;padding:0 3px;line-height:1;flex-shrink:0}
+.frm:hover{color:var(--red)}
+.analyse-bar{background:var(--bg2);border:1px solid #333;border-radius:11px;padding:16px 20px;margin-top:14px;text-align:center}
+.empty{text-align:center;padding:40px 20px;color:var(--td);font-size:13px}
+.pdf-btn{background:#1A1A1A;color:#aaa;border:1px solid #333;border-radius:7px;padding:5px 12px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:5px;transition:.15s}
+.pdf-btn:hover{border-color:var(--pink);color:var(--pink)}
+@media(max-width:640px){.g4{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market:'all',dateRange:'28d',
+  customStart:'',customEnd:'',customPrevStart:'',customPrevEnd:'',reportMd:null,
+  kwSearch:'',kwActiveUrl:null,ga4Sort:'ke',ga4SortCol:'ke',compareMode:true};
+var MARKETS={
+  all:   {label:'All markets',       prefix:null},
+  gx:    {label:'\uD83C\uDF0D GX / Global',    prefix:null, gx:true},
+  us:    {label:'\uD83C\uDDFA\uD83C\uDDF8 United States', prefix:'/us/'},
+  ca:    {label:'\uD83C\uDDE8\uD83C\uDDE6 Canada',        prefix:'/ca/'},
+  uk:    {label:'\uD83C\uDDEC\uD83C\uDDE7 United Kingdom',prefix:'/uk/'},
+  ie:    {label:'\uD83C\uDDEE\uD83C\uDDEA Ireland',       prefix:'/ie/'},
+  it:    {label:'\uD83C\uDDEE\uD83C\uDDF9 Italy',         prefix:'/it/'},
+  nz:    {label:'\uD83C\uDDF3\uD83C\uDDFF New Zealand',   prefix:'/nz/'},
+  row:   {label:'\uD83C\uDF10 Rest of World',  prefix:null, gx:true}
 };
+// GX = any page path with NO known geo prefix (e.g. /destinations, /best-sites, /us is the US root not GX)
+// A path is GX if it doesn't start with /us/, /ca/, /uk/, /ie/, /it/, /nz/
+function isGXPage(url) {
+  if(!url) return false;
+  var p = url.toLowerCase().replace(/^https?:\/\/[^/]+/, '');
+  return !KNOWN_PREFIXES.some(function(pfx){ return p === pfx.slice(0,-1) || p.indexOf(pfx) === 0; });
+}
+var KNOWN_PREFIXES=['/us/','/ca/','/uk/','/ie/','/it/','/nz/'];
+var DATE_RANGES={
+  '7d':  {label:'Last 7 days',   days:7},
+  '28d': {label:'Last 28 days',  days:28},
+  '90d': {label:'Last 90 days',  days:90},
+  '6m':  {label:'Last 6 months', days:180},
+  '12m': {label:'Last 12 months',days:365},
+  'mtd': {label:'Month to date', days:0,mtd:true},
+  'custom':{label:'Custom range \u2026',days:28,custom:true}
+};
+function getDates(rangeKey){
+  var today=new Date(),fmt=function(d){return d.toISOString().split('T')[0];},r=DATE_RANGES[rangeKey]||DATE_RANGES['28d'];
+  if(rangeKey==='custom'&&S.customStart&&S.customEnd)return{startDate:S.customStart,endDate:S.customEnd,prevStartDate:S.customPrevStart||'',prevEndDate:S.customPrevEnd||''};
+  if(r.mtd){var end=fmt(today),start=fmt(new Date(today.getFullYear(),today.getMonth(),1)),prevMonthEnd=fmt(new Date(today.getFullYear(),today.getMonth(),0)),prevMonthStart=fmt(new Date(today.getFullYear(),today.getMonth()-1,1));return{startDate:start,endDate:end,prevStartDate:prevMonthStart,prevEndDate:prevMonthEnd};}
+  var days=r.days,end=fmt(today),start=fmt(new Date(today.getTime()-days*86400000)),pEnd=fmt(new Date(today.getTime()-(days+1)*86400000)),pStart=fmt(new Date(today.getTime()-(days*2+1)*86400000));
+  return{startDate:start,endDate:end,prevStartDate:pStart,prevEndDate:pEnd};
+}
+var GA4_PROPS={all:'340682665',global:'340682665',gx:'340682665',us:'395155886',ca:'395120251',ie:'395169855',nz:'395143837',it:'417387159',uk:'395132493',row:'395176605'};
+function matchMarket(url,marketKey){
+  if(!url)return false;
+  if(marketKey==='all')return true;
+  var m=MARKETS[marketKey];if(!m)return true;
+  // GX / global / row = pages with NO geo prefix
+  if(m.gx) return isGXPage(url);
+  if(!m.prefix)return true;
+  return url.toLowerCase().indexOf(m.prefix)===0||url.toLowerCase().indexOf(m.prefix)>=0;
+}
+var CH={},ROOT=document.getElementById('root');
+var STAR='<svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg>';
+var API_URL=window.location.hostname.includes('netlify')?'/.netlify/functions/claude':'https://api.anthropic.com/v1/messages';
+var N8N_WEBHOOK_URL='https://gdcgroup.app.n8n.cloud/webhook/casinos-seo-data';
+function $(i){return document.getElementById(i);}
+function fmt(n){n=+n||0;return n>=1e6?(n/1e6).toFixed(1).replace(/\.0$/,'')+'M':n>=1e3?(n/1e3).toFixed(1).replace(/\.0$/,'')+'K':String(Math.round(n));}
+// Format seconds as GA4 style: "1m 01s" or "45s"
+function fmtTime(secs){secs=Math.round(+secs||0);if(secs<=0)return'0s';var m=Math.floor(secs/60),s=secs%60;if(m>0)return m+'m '+(s<10?'0':'')+s+'s';return s+'s';}
+function pct(n,d){return d>0?((n-d)/d*100).toFixed(1):'0';}
+function slug(u){return(u||'').replace(/https?:\/\/[^/]+/,'').replace(/\/$/,'')||u;}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function dcol(d){return d>0?'#27AE60':d<0?'#E05C3A':'#666';}
+function fdate(s){if(!s||s.length!==8)return s||'';var mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return mn[+s.slice(4,6)-1]+' '+parseInt(s.slice(6))+', '+s.slice(0,4);}
+function drange(s,e){return s&&e?fdate(s)+' \u2013 '+fdate(e):fdate(s||e);}
+function deb(fn){clearTimeout(S.db);S.db=setTimeout(fn,220);}
+function kc(id){if(CH[id]){try{CH[id].destroy();}catch(e){}delete CH[id];}}
+var PT_STATES='alabama,alaska,arizona,arkansas,california,colorado,connecticut,delaware,florida,georgia,hawaii,idaho,illinois,indiana,iowa,kansas,kentucky,louisiana,maine,maryland,massachusetts,michigan,minnesota,mississippi,missouri,montana,nebraska,nevada,new-hampshire,new-jersey,new-mexico,new-york,north-carolina,north-dakota,ohio,oklahoma,oregon,pennsylvania,rhode-island,south-carolina,south-dakota,tennessee,texas,utah,vermont,virginia,washington,west-virginia,wisconsin,wyoming,ontario,quebec,british-columbia,alberta,manitoba,saskatchewan,nova-scotia'.split(',');
+var PT_BRANDS='duckyluck,betmgm,betrivers,fanduel,draftkings,caesars,borgata,golden-nugget,hard-rock,pointsbet,barstool,bally,betway,unibet,888,partypoker,wsop,pokerstars,bet365,wynn,mgm,resorts,tropicana,virgin,raging-bull,brango,slotocash,bovada,cafe-casino,ignition,mcluck,stake,pulsz,high5,luckyland,funrize,modo,chumba,wow-vegas,sweepslots,realprize,bonus-blitz,croco,yabby,red-dog,planet-7,miami-club,silver-oak,slots-of-vegas,riverslots,betsson,ladbrokes,william-hill,paddypower,betfair,sky-bet,sportingbet,foxbet,betonline,mybookie,xbet,sportsbetting'.split(',');
+var PT_PAYMENTS='paypal,ach,google-pay,apple-pay,venmo,cash-app,visa,mastercard,american-express,amex,discover,skrill,neteller,paysafecard,prepaid,bitcoin,crypto,zelle,prizeout,gigadat'.split(',');
+var PT_BOFU='bonus,no-deposit,free-spins,deposit,cashback,no-wagering,minimum-deposit,apps,live-dealer,slots,blackjack,roulette,poker,baccarat,promo,promotion'.split(',');
+function getPageType(url){
+  var s=slug(url).toLowerCase();
+  if(s.indexOf('/news/')>=0)return'news';if(s.indexOf('/social-casino')>=0)return'social';
+  for(var i=0;i<PT_BRANDS.length;i++)if(s.indexOf(PT_BRANDS[i])>=0)return'casino';
+  if(s.match(/\-casino(\/|$)/))return'casino';
+  for(var i=0;i<PT_PAYMENTS.length;i++){var segs=s.split('/');for(var j=0;j<segs.length;j++)if(segs[j]===PT_PAYMENTS[i])return'bofu';}
+  for(var i=0;i<PT_BOFU.length;i++){var segs=s.split('/');for(var j=0;j<segs.length;j++)if(segs[j]===PT_BOFU[i]||segs[j].startsWith(PT_BOFU[i]+'-'))return'bofu';}
+  var parts=s.split('/').filter(Boolean);
+  if(parts.length>=2&&(parts[0]==='us'||parts[0]==='ca')){for(var i=0;i<PT_STATES.length;i++)if(parts[1]===PT_STATES[i])return'state';}
+  return'other';
+}
+var PTC={state:{label:'State',color:'#5DADE2',bg:'rgba(93,173,226,.15)'},news:{label:'News',color:'#F39C12',bg:'rgba(243,156,18,.15)'},bofu:{label:'BOFU',color:'#27AE60',bg:'rgba(39,174,96,.15)'},casino:{label:'Casino',color:'#E91E8C',bg:'rgba(233,30,140,.15)'},social:{label:'Social',color:'#9B59B6',bg:'rgba(155,89,182,.15)'},other:{label:'Other',color:'#888',bg:'rgba(136,136,136,.12)'}};
+// Normalize GA4's page_type dimension values to our internal type keys
+// GA4 exports may use different casing/naming than our internal keys
+function normalizeGA4PageType(raw) {
+  if(!raw) return null;
+  var r = raw.toLowerCase().trim();
+  if(r==='money page'||r==='moneypage'||r==='money_page') return 'bofu';
+  if(r==='news'||r==='article'||r==='blog') return 'news';
+  if(r==='casino'||r==='casino info'||r==='casino brand'||r==='casino_info') return 'casino';
+  if(r==='bofu'||r==='bottom of funnel'||r==='commercial') return 'bofu';
+  if(r==='state'||r==='state page'||r==='geo') return 'state';
+  if(r==='social'||r==='social casino') return 'social';
+  if(r==='other'||r==='informational') return 'other';
+  return null;
+}
+function ptBadge(type){var c=PTC[type]||PTC.other;return'<span class="pt-badge" style="color:'+c.color+';background:'+c.bg+'">'+c.label+'</span>';}
+var LEGEND='<div class="chart-legend"><div class="legend-item"><div class="legend-swatch" style="background:rgba(255,255,255,.15)"></div>Previous</div><div class="legend-item"><div class="legend-swatch" style="background:#E91E8C"></div>Improved</div><div class="legend-item"><div class="legend-swatch" style="background:#E05C3A"></div>Declined</div></div>';
+function getCols(f){var a=function(k){return f.filter(function(x){return x.toLowerCase().indexOf(k)>=0;});};var cl=a('click'),im=a('impression'),po=a('position'),ct=a('ctr');return{lc:cl[0]||'',pc:cl[1]||'',li:im[0]||'',pi:im[1]||'',lp:po[0]||'',pp:po[1]||'',lctr:ct[0]||''};}
+function parseGSCRows(text,key){if(!text||!text.trim())return[];var r=Papa.parse(text.trim(),{header:true,skipEmptyLines:true});var c=getCols(r.meta&&r.meta.fields||[]);return r.data.map(function(row){return{key:row[key]||'',lc:+row[c.lc]||0,pc:+row[c.pc]||0,li:+row[c.li]||0,pi:+row[c.pi]||0,lp:parseFloat(row[c.lp])||0,pp:parseFloat(row[c.pp])||0,lctr:row[c.lctr]||'0%'};}).filter(function(r){return r.key;});}
+function parseGA4CSV(text){
+  var lines=text.split(/\r?\n/);var cmts=lines.filter(function(l){return l[0]==='#';}).join('\n');
+  var sm=cmts.match(/Start date[:\s]+(\d{8})/i),em=cmts.match(/End date[:\s]+(\d{8})/i);
+  var sm2=cmts.match(/Start date \(comparison\)[:\s]+(\d{8})/i)||cmts.match(/Comparison start[:\s]+(\d{8})/i);
+  var em2=cmts.match(/End date \(comparison\)[:\s]+(\d{8})/i)||cmts.match(/Comparison end[:\s]+(\d{8})/i);
+  var hi=0;for(var i=0;i<lines.length;i++){if(lines[i].trim()&&lines[i][0]!=='#'){hi=i;break;}}
+  var r=Papa.parse(lines.slice(hi).join('\n'),{header:true,skipEmptyLines:true});
+  var flds=r.meta&&r.meta.fields||[];
+  var pk=flds.indexOf('Page path and screen class')>=0?'Page path and screen class':flds.indexOf('Page title and screen class')>=0?'Page title and screen class':flds.indexOf('Page path')>=0?'Page path':'Page title';
+  var hasCmp=flds.some(function(f){return f.toLowerCase().indexOf('comparison')>=0;});
+  function cmpCol(base){var c=[base+' (comparison period)',base+' (previous period)'];for(var i=0;i<c.length;i++)if(flds.indexOf(c[i])>=0)return c[i];return null;}
+  var vC=cmpCol('Views'),keC=cmpCol('Key events');
+  var rows=r.data.map(function(row){
+    var rawPageType=row['page_type']||row['Page type']||row['pageType']||'';
+    var normalizedType=normalizeGA4PageType(rawPageType);
+    return{page:row[pk]||'',pageType:normalizedType||'',ga4PageType:rawPageType,views:+row['Views']||0,users:+row['Active users']||0,engTime:parseFloat(row['Average engagement time per active user'])||0,keyEvents:+row['Key events']||0,viewsPrev:vC?+row[vC]||0:0,keyEventsPrev:keC?+row[keC]||0:0,hasComparison:hasCmp&&vC!==null};}).filter(function(r){return r.page;});
+  var pageCount={};rows.forEach(function(r){pageCount[r.page]=(pageCount[r.page]||0)+1;});
+  var hasDupeRows=Object.values(pageCount).some(function(c2){return c2>1;});
+  var finalRows=rows;
+  if(hasDupeRows&&!hasCmp){
+    var seen={},merged=[];
+    rows.forEach(function(r){if(!seen[r.page]){seen[r.page]=Object.assign({},r);merged.push(seen[r.page]);}else{var e=seen[r.page];e.viewsPrev=r.views;e.keyEventsPrev=r.keyEvents;e.hasComparison=true;}});
+    finalRows=merged;hasCmp=true;
+  }
+  return{type:'ga4',market:cmts.toLowerCase().indexOf('canada')>=0?'CA':'US',ds:sm?sm[1]:'',de:em?em[1]:'',dsPrev:sm2?sm2[1]:'',dePrev:em2?em2[1]:'',hasComparison:hasCmp&&finalRows.some(function(r){return r.hasComparison;}),rows:finalRows};
+}
+function mergeGSC(a,b){if(!a)return b;function mA(x,y){var m={};x.forEach(function(r){m[r.key]=Object.assign({},r);});y.forEach(function(r){if(m[r.key]){var e=m[r.key];e.lc+=r.lc;e.pc+=r.pc;e.li+=r.li;e.pi+=r.pi;if(r.lp>0)e.lp=e.lp>0?(e.lp+r.lp)/2:r.lp;if(r.pp>0)e.pp=e.pp>0?(e.pp+r.pp)/2:r.pp;}else m[r.key]=Object.assign({},r);});return Object.values(m);}return{type:'gsc',market:a.market,site:a.site,dateRange:a.dateRange,ds:a.ds,de:a.de,hasComparison:a.hasComparison||b.hasComparison,pages:mA(a.pages,b.pages),queries:mA(a.queries,b.queries)};}
+function mergeGA4(a,b){
+  if(!a)return b;var twoFiles=!a.hasComparison&&!b.hasComparison&&a.ds&&b.ds&&a.ds!==b.ds;var m={};
+  a.rows.forEach(function(r){m[r.page]=Object.assign({},r);});
+  b.rows.forEach(function(r){if(m[r.page]){var e=m[r.page];if(twoFiles){e.viewsPrev=r.views;e.keyEventsPrev=r.keyEvents;e.hasComparison=true;}else{e.views+=r.views;e.users+=r.users;e.keyEvents+=r.keyEvents;e.engTime=(e.engTime+r.engTime)/2;e.viewsPrev+=r.viewsPrev||0;e.keyEventsPrev+=r.keyEventsPrev||0;}}else{var row=Object.assign({},r);if(twoFiles){row.viewsPrev=r.views;row.keyEventsPrev=r.keyEvents;row.views=0;row.keyEvents=0;row.hasComparison=true;}m[r.page]=row;}});
+  return{type:'ga4',market:a.market,ds:a.ds,de:a.de,dsPrev:twoFiles?b.ds:(a.dsPrev||b.dsPrev||''),dePrev:twoFiles?b.de:(a.dePrev||b.dePrev||''),hasComparison:twoFiles||a.hasComparison||b.hasComparison,rows:Object.values(m)};
+}
+async function doZip(file){var z=new JSZip(),L=await z.loadAsync(file);async function rd(n){var f=L.file(n);return f?await f.async('string'):'';}var fT=await rd('Filters.csv'),pT=await rd('Pages.csv'),qT=await rd('Queries.csv');var fil={};fT.split(/\r?\n/).forEach(function(l){var i=l.indexOf(',');if(i>-1)fil[l.slice(0,i).trim()]=l.slice(i+1).trim();});var sp=(fil['Page']||'').replace(/^\+/,'');var pages=parseGSCRows(pT,'Top pages'),queries=parseGSCRows(qT,'Top queries');return{type:'gsc',market:sp.indexOf('/ca')>=0?'CA':'US',site:sp.split('/').slice(0,3).join('/')||file.name,dateRange:fil['Date']||'Last period',ds:fil['Start date']||'',de:fil['End date']||'',hasComparison:pages.length>0&&pages[0].pc>0,pages:pages,queries:queries};}
+async function doCSV(file){return parseGA4CSV(await file.text());}
+function loadLiveData(market){
+  market=market||S.market||'all';var btn=$('liveLoadBtn'),statusEl=$('liveStatus');
+  if(btn)btn.disabled=true;if(statusEl)statusEl.innerHTML='<span style="color:#888">Fetching live data...</span>';
+  if(!N8N_WEBHOOK_URL||N8N_WEBHOOK_URL==='YOUR_N8N_WEBHOOK_URL_HERE'){if(statusEl)statusEl.innerHTML='<span style="color:#E05C3A">&#9888; Add n8n webhook URL</span>';if(btn)btn.disabled=false;return;}
+  var dates=getDates(S.dateRange||'28d'),start=dates.startDate,end=dates.endDate,pStart=dates.prevStartDate,pEnd=dates.prevEndDate;
+  fetch(N8N_WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({site:'https://www.casinos.com/',market:market.toLowerCase(),startDate:start,endDate:end,prevStartDate:pStart,prevEndDate:pEnd})})
+  .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+  .then(function(d){
+    if(d.gsc){S.gsc=d.gsc;}
+    if(d.ga4){d.ga4.rows.forEach(function(r){r.pageType=getPageType(r.page)||'other';});S.ga4=d.ga4;}
+    S.files=[{name:'Live data ('+market+') '+start+' to '+end,type:'LIVE',status:'ok',info:start+' \u2013 '+end+' + comparison'}];
+    S.ta=null;S.reportMd=null;
+    if(statusEl)statusEl.innerHTML='<span style="color:#27AE60">&#10003; Loaded '+(d.gsc?d.gsc.pages.length:0)+' pages ('+start+' vs previous period)</span>';
+    if(btn)btn.disabled=false;var ab=$('analyseBtn');if(ab)ab.style.display='block';renderUpload();
+  })
+  .catch(function(e){if(statusEl)statusEl.innerHTML='<span style="color:#E05C3A">&#9888; '+esc(e.message)+'</span>';if(btn)btn.disabled=false;});
+}
+window.loadLiveData=loadLiveData;
+function addFiles(files){var arr=Array.from(files);arr.forEach(function(f){if(f.name.match(/\.(zip|csv)$/i))S.files.push({name:f.name,type:f.name.match(/\.zip$/i)?'GSC':'GA4',status:'loading',file:f,info:''});});renderUpload();arr.forEach(function(f){var rec=S.files.find(function(r){return r.name===f.name&&r.status==='loading';});if(!rec)return;(async function(){try{if(f.name.match(/\.zip$/i)){var g=await doZip(f);S.gsc=mergeGSC(S.gsc,g);rec.info=(g.ds?drange(g.ds,g.de):g.dateRange)+(g.hasComparison?' + comparison':'');}else{var a=await doCSV(f);S.ga4=mergeGA4(S.ga4,a);rec.info=(a.ds?drange(a.ds,a.de):'GA4')+(a.hasComparison?' + comparison':'');}rec.status='ok';}catch(e){rec.status='error';}renderUpload();})();});}
+window.removeFile=function(i){S.files.splice(i,1);S.gsc=null;S.ga4=null;var rem=S.files.filter(function(f){return f.status==='ok';});S.files.forEach(function(r){r.status='loading';r.info='';});renderUpload();rem.forEach(function(rec){(async function(){try{if(rec.type==='GSC'){var g=await doZip(rec.file);S.gsc=mergeGSC(S.gsc,g);rec.info=(g.ds?drange(g.ds,g.de):g.dateRange)+(g.hasComparison?' + comparison':'');}else{var a=await doCSV(rec.file);S.ga4=mergeGA4(S.ga4,a);rec.info=(a.ds?drange(a.ds,a.de):'GA4')+(a.hasComparison?' + comparison':'');}rec.status='ok';}catch(e){rec.status='error';}renderUpload();})();});};
+function dateBadge(){var g=S.gsc,a=S.ga4,p=[];if(g)p.push(g.ds?drange(g.ds,g.de):g.dateRange);if(a&&a.ds)p.push('GA4: '+drange(a.ds,a.de));return p.join(' \u00b7 ')||'No date';}
+function mkMC(label,val,sub,subCol,dt){return'<div class="mc"><div class="lb">'+esc(label)+'</div><div class="vl">'+esc(val)+'</div>'+(sub?'<div class="sb" style="color:'+(subCol||'#555')+'">'+esc(sub)+'</div>':'')+(dt?'<div class="dt">'+esc(dt)+'</div>':'')+'</div>';}
+function mkTbl(cols,rows,empty){if(!rows.length)return'<div class="empty">'+(empty||'No data')+'</div>';var h='<div class="tbl"><table><thead><tr>'+cols.map(function(c){return'<th'+(c.r?' class="r"':'')+'>'+c.l+'</th>';}).join('')+'</tr></thead><tbody>';rows.forEach(function(row){h+='<tr>'+row.map(function(cell,j){var v=cell&&cell.l!==undefined?cell.l:cell,st='';if(cell&&cell.c)st+='color:'+cell.c+';';if(cell&&cell.b)st+='font-weight:700;';if(cell&&cell.html)return'<td '+(cols[j]&&cols[j].r?'class="r"':'')+'>'+v+'</td>';var cls=cols[j]&&cols[j].r?'r':cols[j]&&cols[j].mono?'mono':'';return'<td'+(cls?' class="'+cls+'"':'')+' style="'+st+'" title="'+esc(v)+'">'+esc(v)+'</td>';}).join('')+'</tr>';});return h+'</tbody></table></div>';}
+function mkFbar(pfx,ph,types,sorts,extra){var h='<div class="fb"><input id="'+pfx+'q" placeholder="'+ph+'" style="flex:1;min-width:120px">';if(types)h+='<select id="'+pfx+'ty">'+types.map(function(t){return'<option value="'+t.v+'">'+t.l+'</option>';}).join('')+'</select>';if(sorts)h+='<select id="'+pfx+'so">'+sorts.map(function(s){return'<option value="'+s.v+'">'+s.l+'</option>';}).join('')+'</select>';if(extra)h+=extra;h+='<span id="'+pfx+'cnt" class="cnt"></span></div>';return h;}
+function bindFbar(pfx,fn){var qi=$(pfx+'q'),ti=$(pfx+'ty'),si=$(pfx+'so'),pi=$(pfx+'pt');if(qi)qi.oninput=function(){deb(fn);};if(ti)ti.onchange=fn;if(si)si.onchange=function(){S.ga4SortCol=null;fn();};if(pi)pi.onchange=fn;}
+function fbarVals(pfx){return{q:($(pfx+'q')||{value:''}).value.toLowerCase(),ty:($(pfx+'ty')||{value:'all'}).value,so:($(pfx+'so')||{value:'views'}).value,pt:($(pfx+'pt')||{value:'all'}).value};}
+var PT_SEL='<select id="PFXPT"><option value="all">All page types</option><option value="state">States</option><option value="news">News</option><option value="bofu">BOFU</option><option value="casino">Casino brands</option><option value="social">Social</option><option value="other">Other</option></select>';
+function filterPT(pages,pt){if(pt==='all')return pages;return pages.filter(function(p){return getPageType(p.key||p.page)===pt;});}
+function posChart(id,pages,limit){
+  var data=[].concat(pages).filter(function(p){return p.lp>0&&p.pp>0;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,limit||15);
+  if(!data.length)return;
+  setTimeout(function(){var el=$(id);if(!el)return;kc(id);
+    CH[id]=new Chart(el.getContext('2d'),{type:'bar',data:{labels:data.map(function(p){return slug(p.key).replace(/\/(us|ca)\//,'/');}),
+    datasets:[{label:'Previous',data:data.map(function(p){return+p.pp.toFixed(1);}),backgroundColor:'rgba(255,255,255,.12)',borderRadius:3,barThickness:6},{label:'Improved',data:data.map(function(p){return p.pp>p.lp?+p.lp.toFixed(1):null;}),backgroundColor:'#E91E8C',borderRadius:3,barThickness:6},{label:'Declined',data:data.map(function(p){return p.lp>=p.pp?+p.lp.toFixed(1):null;}),backgroundColor:'#E05C3A',borderRadius:3,barThickness:6}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){if(c.datasetIndex===0)return'Previous: pos '+c.raw;var d=data[c.dataIndex],diff=d.pp-d.lp;return'Current: pos '+c.raw+' ('+(diff>0?'+':'')+diff.toFixed(1)+')';}}}},
+    scales:{x:{reverse:true,ticks:{color:'#444',font:{size:9}},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'Position (lower = better)',color:'#444',font:{size:9}}},y:{ticks:{color:'#888',font:{size:9.5}},grid:{display:false}}}}});},80);
+}
+function barChart(id,labels,datasets){setTimeout(function(){var el=$(id);if(!el)return;kc(id);CH[id]=new Chart(el.getContext('2d'),{type:'bar',data:{labels:labels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#888',font:{size:10},boxWidth:10}}},scales:{x:{ticks:{color:'#888',font:{size:9},maxRotation:28},grid:{display:false}},y:{ticks:{color:'#444',font:{size:9}},grid:{color:'rgba(255,255,255,.04)'}}}}});},80);}
+/* OVERVIEW */
+function tabOverview(){
+  var g=S.gsc,a=S.ga4,mktKey=S.market||'all';
+  var filteredPages=g?g.pages.filter(function(p){return matchMarket(p.key,mktKey);}):[];
+  if(a)a.rows.forEach(function(r){
+    if(!r.pageType) r.pageType = normalizeGA4PageType(r.ga4PageType) || getPageType(r.page) || 'other';
+  });
+  var filteredGA4=a?a.rows.filter(function(r){
+    return getGA4FilteredRows([r], mktKey).length > 0;
+  }):[];
+  var lc=0,pc=0,li=0,pi=0;filteredPages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});
+  if(!filteredPages.length&&!filteredGA4.length){$('tc').innerHTML='<div class="empty" style="padding:40px">No data for this market.</div>';return;}
+  filteredGA4.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'';});
+  var m=filteredGA4.filter(function(r){return r.pageType==='bofu'||r.pageType==='casino'||r.pageType==='state'||r.pageType==='Money Page';});
+  var totV=0,totKE=0,totVP=0,totKEP=0;m.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
+  var cd=parseFloat(pct(lc,pc)),id2=parseFloat(pct(li,pi)),vDiff=parseFloat(pct(totV,totVP)),kDiff=parseFloat(pct(totKE,totKEP));
+  var hasCmp=g&&g.hasComparison&&S.compareMode,hasCmpG=a&&a.hasComparison&&S.compareMode;
+  var gn=filteredPages.filter(function(p){return p.lp>0&&p.pp>0&&p.pp>p.lp;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,7);
+  var dc2=filteredPages.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,7);
+  var topKE=m.slice().sort(function(a,b){return b.keyEvents-a.keyEvents;}).slice(0,8);
+  var pd=gn.concat(dc2).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,14);
+  var cH=pd.length?Math.max(320,pd.length*40+80):0;
+  var html='<div class="g4">'+mkMC('Clicks [GSC]',fmt(lc),hasCmp?(cd>=0?'\u2191 ':'\u2193 ')+Math.abs(cd)+'% vs prev':'',hasCmp?(cd>=0?'#27AE60':'#E05C3A'):'#555',g&&g.ds?drange(g.ds,g.de):g?g.dateRange:'')+mkMC('Impressions [GSC]',fmt(li),hasCmp?(id2>=0?'\u2191 ':'\u2193 ')+Math.abs(id2)+'% vs prev':'',hasCmp?(id2>=0?'#27AE60':'#E05C3A'):'#555')+mkMC('GA4 Views',totV>0?fmt(totV):'\u2014',hasCmpG&&totVP>0?(vDiff>=0?'\u2191 ':'\u2193 ')+Math.abs(vDiff)+'% vs prev':'Money pages',hasCmpG&&totVP>0?(vDiff>=0?'#27AE60':'#E05C3A'):'#888',a&&a.ds?drange(a.ds,a.de):'')+mkMC('Exit Click Goal \u2713',totKE>0?fmt(totKE):'\u2014',hasCmpG&&totKEP>0?(kDiff>=0?'\u2191 ':'\u2193 ')+Math.abs(kDiff)+'% vs prev':'exit_click_goal',hasCmpG&&totKEP>0?(kDiff>=0?'#27AE60':'#E05C3A'):'#888')+'</div>';
+  if(pd.length)html+='<div class="card"><div class="sec">Position movement [GSC] \u2014 '+(g.ds?drange(g.ds,g.de):g.dateRange)+(hasCmp?' vs prev':'')+'</div>'+LEGEND+'<div style="height:'+cH+'px"><canvas id="cOv"></canvas></div></div>';
+  html+='<div class="g2"><div class="card"><div class="sec">Top position gainers [GSC]</div>';
+  if(gn.length)gn.forEach(function(p){var d=p.pp-p.lp;html+='<div class="pr"><div class="pg" title="'+esc(slug(p.key))+'">'+esc(slug(p.key))+'</div><div class="vv">'+p.pp.toFixed(0)+'\u2192'+p.lp.toFixed(0)+'</div><div class="dv" style="color:#27AE60">+'+d.toFixed(1)+'</div></div>';});
+  else html+='<div class="empty" style="padding:20px">Upload GSC data</div>';
+  html+='</div><div class="card"><div class="sec">Position decliners [GSC]</div>';
+  if(dc2.length)dc2.forEach(function(p){var d=p.pp-p.lp;html+='<div class="pr"><div class="pg" title="'+esc(slug(p.key))+'">'+esc(slug(p.key))+'</div><div class="vv">'+p.pp.toFixed(0)+'\u2192'+p.lp.toFixed(0)+'</div><div class="dv" style="color:#E05C3A">'+d.toFixed(1)+'</div></div>';});
+  else html+='<div style="font-size:11px;color:#555;padding:8px">No significant declines</div>';
+  html+='</div></div>';
+  if(topKE.length){var ds=[{label:'Current',data:topKE.map(function(r){return r.keyEvents;}),backgroundColor:'#E91E8C',borderRadius:3}];if(hasCmpG&&topKE[0]&&topKE[0].keyEventsPrev)ds.unshift({label:'Previous',data:topKE.map(function(r){return r.keyEventsPrev||0;}),backgroundColor:'rgba(255,255,255,.12)',borderRadius:3});html+='<div class="card"><div class="sec">Exit clicks [GA4] \u2014 top pages</div><div style="height:180px"><canvas id="cKE"></canvas></div></div>';$('tc').innerHTML=html;barChart('cKE',topKE.map(function(r){return r.page.replace(/^\/(us|ca)\//,'').replace(/-/g,' ').slice(0,18);}),ds);}else $('tc').innerHTML=html;
+  if(pd.length)posChart('cOv',pd,14);
+}
+/* POSITIONS */
+function tabPositions(){
+  if(!S.gsc){$('tc').innerHTML='<div class="empty">Upload a GSC zip to see position data</div>';return;}
+  var g=S.gsc,dr=g.ds?drange(g.ds,g.de):g.dateRange;
+  var ptSel=PT_SEL.replace('id="PFXPT"','id="p_pt"');
+  var cd=g.pages.filter(function(p){return p.lp>0&&p.pp>0;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,18);
+  $('tc').innerHTML='<div class="card"><div class="sec">Position movement [GSC] \u2014 '+esc(dr)+(g.hasComparison?' (comparison included)':'')+'</div>'+LEGEND+'<div style="height:'+Math.max(320,cd.length*40+80)+'px"><canvas id="cPF"></canvas></div></div>'
+    +mkFbar('p_','Filter by page path...',[{v:'all',l:'All pages'}],[{v:'gain',l:'Best gainers'},{v:'loss',l:'Biggest declines'},{v:'clicks',l:'Most clicks'},{v:'impr',l:'Most impressions'},{v:'pos',l:'Best position'}],ptSel)+'<div id="pTbl"></div>';
+  bindFbar('p_',rPos);rPos();
+  var chartPages=g.pages.filter(function(p){return matchMarket(p.key,S.market||'all');});
+  posChart('cPF',chartPages,18);
+}
+function rPos(){
+  var g=S.gsc;if(!g)return;var v=fbarVals('p_'),hasCmp=g.hasComparison&&S.compareMode,mktKey2=S.market||'all';
+  var pages=g.pages.filter(function(p){if(!matchMarket(p.key,mktKey2))return false;if(v.q&&p.key.toLowerCase().indexOf(v.q)<0)return false;return true;});
+  pages=filterPT(pages,v.pt);
+  pages.sort(function(a,b){return v.so==='gain'?(b.pp-b.lp)-(a.pp-a.lp):v.so==='loss'?(a.pp-a.lp)-(b.pp-b.lp):v.so==='clicks'?b.lc-a.lc:v.so==='impr'?b.li-a.li:a.lp-b.lp;});
+  var cnt=$('p_cnt');if(cnt)cnt.textContent=pages.length+' pages';
+  var cols=[{l:'Type'},{l:'Page',mono:true}];
+  if(hasCmp)cols.push({l:'Prev pos',r:true},{l:'Curr pos',r:true},{l:'Change',r:true});else cols.push({l:'Position',r:true});
+  cols.push({l:'Clicks',r:true},{l:'Prev cl.',r:true},{l:'Impressions',r:true},{l:'CTR',r:true});
+  var rows=pages.slice(0,200).map(function(p){var d=p.pp>0&&p.lp>0?p.pp-p.lp:null;var pt=getPageType(p.key);var row=[{l:ptBadge(pt),html:true},slug(p.key)];if(hasCmp)row.push({l:p.pp>0?p.pp.toFixed(1):'\u2014',c:'#555'},{l:p.lp>0?p.lp.toFixed(1):'\u2014'},{l:d!=null?(d>0?'+':'')+d.toFixed(1):'\u2014',c:dcol(d||0),b:true});else row.push({l:p.lp>0?p.lp.toFixed(1):'\u2014'});row.push({l:fmt(p.lc),c:p.lc>p.pc?'#27AE60':null},{l:fmt(p.pc),c:'#555'},{l:fmt(p.li)},{l:p.lctr,c:'#555'});return row;});
+  var t=$('pTbl');if(t)t.innerHTML=mkTbl(cols,rows,'No pages match filters');
+  var chartPages2=g.pages.filter(function(p){return matchMarket(p.key,S.market||'all');});
+  var gnR=chartPages2.filter(function(p){return p.lp>0&&p.pp>0&&p.pp>p.lp;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,9);
+  var dcR=chartPages2.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,9);
+  if($('cPF')&&(gnR.length||dcR.length))posChart('cPF',gnR.concat(dcR).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}),18);
+}
+/* ============================================================
+   GA4 TAB — v2.3 REWRITE
+   Fixed: geo filtering, exit click goals, full URL display,
+   accurate metrics, comparison display
+   ============================================================ */
+var GEO_MKTS=['ca','uk','ie','it','nz','row'];
+
+function getGA4FilteredRows(allRows, mktKey) {
+  if(mktKey === 'all') return allRows;
+
+  // GX / global = pages with NO geo prefix in path
+  if(mktKey === 'gx' || mktKey === 'global' || (MARKETS[mktKey] && MARKETS[mktKey].gx)) {
+    return allRows.filter(function(r){ return isGXPage(r.page); });
+  }
+
+  // Specific geo with a known prefix (us, ca, uk, ie, it, nz)
+  var m = MARKETS[mktKey];
+  if(m && m.prefix) {
+    return allRows.filter(function(r){
+      var p = (r.page||'').toLowerCase().replace(/^https?:\/\/[^/]+/,'');
+      // exact root match like /us or /ca, OR starts with /us/ or /ca/
+      return p === m.prefix.slice(0,-1) || p.indexOf(m.prefix) === 0;
+    });
+  }
+
+  // For geo-specific live data properties loaded by n8n (the data is already geo-scoped)
+  // Check if the rows have geo paths - if yes, filter; if no, assume all data is for this market
+  if(GEO_MKTS.indexOf(mktKey) >= 0) {
+    var hasPrefixedRows = allRows.some(function(r){
+      return KNOWN_PREFIXES.some(function(pfx){ return (r.page||'').indexOf(pfx) >= 0; });
+    });
+    if(hasPrefixedRows) {
+      return allRows.filter(function(r){ return matchMarket(r.page, mktKey); });
+    }
+    // No geo prefixes in data = geo-specific property, show everything
+    return allRows;
+  }
+
+  return allRows;
+}
+
+function tabGA4(){
+  if(!S.ga4){$('tc').innerHTML='<div class="empty">Upload a GA4 CSV to see traffic data</div>';return;}
+  var a=S.ga4,hasCmp=a.hasComparison&&S.compareMode;
+  var dr=a.ds?drange(a.ds,a.de):'';
+  var prevStr=hasCmp&&a.dsPrev?drange(a.dsPrev,a.dePrev):'';
+
+  // Ensure page types set on all rows - prefer GA4 dimension, fall back to URL
+  a.rows.forEach(function(r){
+    if(!r.pageType){
+      var fromUrl=getPageType(r.page)||'other';
+      r.pageType=fromUrl;
+    }
+  });
+
+  var mktKey=S.market||'all';
+  var mktRows=getGA4FilteredRows(a.rows, mktKey);
+
+  // Compute totals from all filtered rows (not just money pages)
+  var totV=0,totKE=0,totVP=0,totKEP=0;
+  mktRows.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=(r.viewsPrev||0);totKEP+=(r.keyEventsPrev||0);});
+
+  var vd=totVP>0?parseFloat(pct(totV,totVP)):null;
+  var kd=totKEP>0?parseFloat(pct(totKE,totKEP)):null;
+
+  var ptSel=PT_SEL.replace('id="PFXPT"','id="g_pt"');
+
+  // Period banner
+  var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
+  var periodBanner='<div style="background:#1A1A1A;border:1px solid #2a2a2a;border-radius:11px;padding:10px 16px;margin-bottom:12px">';
+  periodBanner+='<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:space-between">';
+  periodBanner+='<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">';
+  if(hasCmp && dr && prevStr){
+    periodBanner+='<div style="display:flex;align-items:center;gap:8px"><div style="width:20px;height:8px;background:#E91E8C;border-radius:2px"></div><div><div style="font-size:11px;font-weight:600;color:#F0F0F0">Current</div><div style="font-size:10px;color:#888">'+esc(dr)+'</div></div></div>';
+    periodBanner+='<div style="display:flex;align-items:center;gap:8px"><div style="width:20px;height:8px;background:rgba(255,255,255,.15);border-radius:2px;border:1px solid #444"></div><div><div style="font-size:11px;color:#888">Previous</div><div style="font-size:10px;color:#555">'+esc(prevStr)+'</div></div></div>';
+  } else {
+    periodBanner+='<div style="font-size:10px;color:#888">Period: <span style="color:#F0F0F0;font-weight:600">'+esc(dr||'Loaded data')+'</span></div>';
+  }
+  periodBanner+='</div>';
+  // Geo + key event badge
+  periodBanner+='<div style="display:flex;gap:8px;align-items:center">';
+  periodBanner+='<span style="background:rgba(233,30,140,.1);border:1px solid rgba(233,30,140,.25);border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;color:#E91E8C">'+esc(mktLabel)+'</span>';
+  periodBanner+='<span style="background:rgba(39,174,96,.1);border:1px solid rgba(39,174,96,.25);border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;color:#27AE60">Key event: exit_click_goal</span>';
+  periodBanner+='</div></div></div>';
+
+  // Metric cards
+  var metricsHtml='<div id="gm" class="g4">'
+    +mkMC('Total Views [GA4]',fmt(totV),
+      vd!==null?(vd>=0?'\u2191 '+Math.abs(vd)+'% vs prev':'\u2193 '+Math.abs(vd)+'% vs prev'):'All pages',
+      vd!==null?(vd>=0?'#27AE60':'#E05C3A'):'#888', dr)
+    +mkMC('Exit Click Goal \u2713',fmt(totKE),
+      kd!==null?(kd>=0?'\u2191 '+Math.abs(kd)+'% vs prev':'\u2193 '+Math.abs(kd)+'% vs prev'):'exit_click_goal key event',
+      kd!==null?(kd>=0?'#27AE60':'#E05C3A'):'#E91E8C')
+    +mkMC('Avg Conv. Rate',totV>0?(totKE/totV*100).toFixed(2)+'%':'\u2014','Exit click goals \u00f7 views','#888')
+    +mkMC('Pages',String(mktRows.length),'Matching market filter','#555')
+    +'</div>';
+
+  $('tc').innerHTML=metricsHtml+periodBanner
+    +'<div class="card"><div class="sec">Exit Click Goal (exit_click_goal) — top 10 pages</div><div style="height:185px"><canvas id="cG4"></canvas></div></div>'
+    +mkFbar('g_','Filter by page URL...',
+      [{v:'all',l:'All pages'},{v:'money',l:'Money pages only'}],
+      [{v:'ke',l:'\u2193 Exit Click Goals'},{v:'views',l:'\u2193 Most views'},{v:'conv',l:'\u2193 Best conv. rate'},{v:'lowconv',l:'\u2191 Worst conv. rate'},{v:'eng',l:'\u2193 Most engaged'},{v:'vdrop',l:'\u2193 Biggest view drop'}],
+      ptSel)
+    +'<div id="gTbl"></div>';
+
+  bindFbar('g_',rGA4);
+  rGA4();
+}
+
+function rGA4(){
+window.rGA4=rGA4;
+  var a=S.ga4;if(!a)return;
+  var v=fbarVals('g_'),hasCmp=a.hasComparison&&S.compareMode;
+  var mktKey=S.market||'all';
+
+  a.rows.forEach(function(r){
+    if(!r.pageType){
+      r.pageType = normalizeGA4PageType(r.ga4PageType) || getPageType(r.page) || 'other';
+    }
+  });
+
+  // Apply market filter first
+  var src=getGA4FilteredRows(a.rows, mktKey);
+
+  // Apply text search on URL
+  if(v.q) src=src.filter(function(r){return r.page.toLowerCase().indexOf(v.q)>=0;});
+
+  // Apply type filter
+  if(v.ty==='money'){
+    src=src.filter(function(r){
+      return r.pageType==='bofu'||r.pageType==='casino'||r.pageType==='state'||r.pageType==='Money Page';
+    });
+  }
+
+  // Apply page type badge filter
+  if(v.pt!=='all') src=src.filter(function(r){return r.pageType===v.pt;});
+
+  // Sort — column header clicks override dropdown
+  var so=S.ga4SortCol||v.so||'ke';
+  src=src.slice().sort(function(a2,b2){
+    if(so==='ke')return b2.keyEvents-a2.keyEvents;
+    if(so==='conv'){var ca=a2.views>0?a2.keyEvents/a2.views:0,cb=b2.views>0?b2.keyEvents/b2.views:0;return cb-ca;}
+    if(so==='lowconv'){var ca2=a2.views>0?a2.keyEvents/a2.views:1,cb2=b2.views>0?b2.keyEvents/b2.views:1;return ca2-cb2;}
+    if(so==='eng')return b2.engTime-a2.engTime;
+    if(so==='vdrop'){var da=(a2.views||0)-(a2.viewsPrev||0),db=(b2.views||0)-(b2.viewsPrev||0);return da-db;}
+    return b2.views-a2.views;
+  });
+
+  // Recompute totals from filtered set
+  var totV=0,totKE=0,totVP=0,totKEP=0;
+  src.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=(r.viewsPrev||0);totKEP+=(r.keyEventsPrev||0);});
+
+  var cnt=$('g_cnt');if(cnt)cnt.textContent=src.length+' pages';
+
+  var vd=totVP>0?parseFloat(pct(totV,totVP)):null;
+  var kd=totKEP>0?parseFloat(pct(totKE,totKEP)):null;
+
+  // Refresh metric cards with filtered totals
+  var gm=$('gm');
+  if(gm) gm.innerHTML=
+    mkMC('Total Views [GA4]',fmt(totV),
+      vd!==null?(vd>=0?'\u2191 '+Math.abs(vd)+'% vs prev':'\u2193 '+Math.abs(vd)+'% vs prev'):'Filtered set',
+      vd!==null?(vd>=0?'#27AE60':'#E05C3A'):'#888', a.ds?drange(a.ds,a.de):'')
+    +mkMC('Exit Click Goal \u2713',fmt(totKE),
+      kd!==null?(kd>=0?'\u2191 '+Math.abs(kd)+'% vs prev':'\u2193 '+Math.abs(kd)+'% vs prev'):'exit_click_goal key event',
+      kd!==null?(kd>=0?'#27AE60':'#E05C3A'):'#E91E8C')
+    +mkMC('Avg Conv. Rate',totV>0?(totKE/totV*100).toFixed(2)+'%':'\u2014','Exit click goals \u00f7 views','#888')
+    +mkMC('Pages',String(src.length),'Matching filter','#555');
+
+  // Build table
+  var currLabel=a.ds?drange(a.ds,a.de):'Current';
+  var prevLabel=a.dsPrev?drange(a.dsPrev,a.dePrev):a.dePrev?drange('',a.dePrev):'Previous';
+
+  // Build raw HTML table for GA4 (custom rendering for full URL display)
+  var gt=$('gTbl');
+  if(!gt)return;
+
+  if(!src.length){gt.innerHTML='<div class="empty">No pages match filter</div>';return;}
+
+  var sortArrow=function(col){return so===col?' <span style="color:#E91E8C">\u25bc</span>':' <span style="color:#333">\u25bc</span>';};
+  var thClick=function(col,label){return'<th class="r" style="cursor:pointer;user-select:none" onclick="S.ga4SortCol=\''+col+'\';rGA4()" title="Sort by '+label+'">'+label+sortArrow(col)+'</th>';};
+
+  var thead='<tr>'
+    +'<th>Type</th>'
+    +'<th>Page URL \u2014 '+esc(MARKETS[mktKey]?MARKETS[mktKey].label:mktKey)+'</th>'
+    +thClick('views','Views')
+    +(hasCmp?'<th class="r">Views prev</th><th class="r">\u0394 Views</th>':'')
+    +thClick('ke','Exit Click Goal')
+    +(hasCmp?'<th class="r">ECG prev</th><th class="r">\u0394 ECG</th>':'')
+    +thClick('conv','Conv.%')
+    +thClick('eng','Eng. Time')
+    +'</tr>';
+
+  var tbodyRows=src.slice(0,150).map(function(r){
+    var cv=r.views>0?r.keyEvents/r.views*100:0;
+    var vD=hasCmp&&r.viewsPrev>0?r.views-r.viewsPrev:null;
+    var kD=hasCmp&&r.keyEventsPrev>0?r.keyEvents-r.keyEventsPrev:null;
+    var pt=getPageType(r.page);
+    var badge=ptBadge(pt);
+    var pageDisplay=r.page.replace(/^https?:\/\/[^/]+/,'');
+    if(!pageDisplay||pageDisplay==='/')pageDisplay=r.page;
+    var cvCol=cv>=25?'#27AE60':cv>=12?'#E91E8C':cv<3&&r.views>50?'#E05C3A':'#888';
+    var row='<tr>'
+      +'<td>'+badge+'</td>'
+      +'<td class="url-cell" style="font-family:monospace;font-size:10px;color:#aaa" title="'+esc(r.page)+'">'+esc(pageDisplay)+'</td>'
+      +'<td class="r">'+fmt(r.views)+'</td>';
+    if(hasCmp){
+      var vdStr=vD!==null?(vD>=0?'+':'')+fmt(vD):'\u2014';
+      var vdCol=vD!==null?dcol(vD):'#555';
+      row+='<td class="r" style="color:#555">'+fmt(r.viewsPrev||0)+'</td>'
+        +'<td class="r" style="color:'+vdCol+';font-weight:'+(vD!==null?'700':'400')+'">'+vdStr+'</td>';
+    }
+    var keCol=r.keyEvents>=50?'#E91E8C':r.keyEvents>0?'#F0F0F0':'#444';
+    row+='<td class="r" style="color:'+keCol+';font-weight:'+(r.keyEvents>=50?'700':'400')+'">'+fmt(r.keyEvents)+'</td>';
+    if(hasCmp){
+      var kdStr=kD!==null?(kD>=0?'+':'')+fmt(kD):'\u2014';
+      var kdCol=kD!==null?dcol(kD):'#555';
+      row+='<td class="r" style="color:#555">'+fmt(r.keyEventsPrev||0)+'</td>'
+        +'<td class="r" style="color:'+kdCol+';font-weight:'+(kD!==null?'700':'400')+'">'+kdStr+'</td>';
+    }
+    row+='<td class="r" style="color:'+cvCol+';font-weight:'+(cv>=25||cv<3?'700':'400')+'">'+cv.toFixed(2)+'%</td>'
+      +'<td class="r" style="color:'+(r.engTime<10&&r.views>30?'#E05C3A':'#555')+'">'+fmtTime(r.engTime)+'</td>'
+      +'</tr>';
+    return row;
+  }).join('');
+
+  gt.innerHTML='<div class="tbl"><table><thead>'+thead+'</thead><tbody>'+tbodyRows+'</tbody></table></div>';
+
+  // Update chart — exit clicks by top pages
+  var top=src.slice(0,10);
+  var ds=[{label:'Exit Click Goal',data:top.map(function(r){return r.keyEvents;}),backgroundColor:'#E91E8C',borderRadius:3}];
+  if(hasCmp) ds.unshift({label:'Exit Click Goal (prev)',data:top.map(function(r){return r.keyEventsPrev||0;}),backgroundColor:'rgba(255,255,255,.1)',borderRadius:3});
+  barChart('cG4',top.map(function(r){
+    var p=r.page.replace(/^\/(us|ca|uk|ie|it|nz)\//,'').replace(/-/g,' ');
+    return p.length>22?p.slice(0,20)+'\u2026':p;
+  }),ds);
+}
+/* ============================================================
+   KEYWORDS TAB — v2.3 with AI Overview badges
+   ============================================================ */
+function tabKeywords(){
+  if(!S.gsc){$('tc').innerHTML='<div class="empty">Upload a GSC zip to see keyword data</div>';return;}
+  var g=S.gsc,dr=g.ds?drange(g.ds,g.de):g.dateRange,mktKey=S.market||'all';
+  var allQs=g.queries||[];
+  var hasPageData=allQs.length>0&&allQs.some(function(q){return q.page;});
+
+  // AI Overview query set
+  var aioSet=new Set((g.aioQueries||[]).map(function(q){return q.toLowerCase();}));
+
+  // Market filter
+  var qs=allQs.filter(function(q){
+    if(mktKey==='all')return true;
+    if(!q.page)return true;
+    return matchMarket(q.page,mktKey);
+  });
+
+  // Active URL drill-down filter
+  var activeUrl=S.kwActiveUrl||null;
+  if(activeUrl) qs=qs.filter(function(q){return q.page===activeUrl;});
+
+  // Text search
+  var searchVal=(S.kwSearch||'').toLowerCase();
+  if(searchVal){
+    qs=qs.filter(function(q){
+      return q.key.toLowerCase().indexOf(searchVal)>=0||
+             (q.page&&q.page.toLowerCase().indexOf(searchVal)>=0);
+    });
+  }
+
+  // Tab sets
+  var sets={
+    top:qs.slice().sort(function(a,b){return b.li-a.li;}).slice(0,100),
+    gainers:qs.filter(function(q){return q.lc>q.pc&&q.lc>=2;}).sort(function(a,b){return(b.lc-b.pc)-(a.lc-a.pc);}).slice(0,100),
+    losers:qs.filter(function(q){return q.lc<q.pc&&q.pc>=2;}).sort(function(a,b){return(a.lc-a.pc)-(b.lc-b.pc);}).slice(0,100),
+    opps:qs.filter(function(q){return q.li>100&&q.lp>10&&q.lp<=20&&q.lctr&&parseFloat(q.lctr)<3;}).sort(function(a,b){return b.li-a.li;}).slice(0,100),
+    page1:qs.filter(function(q){return q.lp>=1&&q.lp<=10;}).sort(function(a,b){return a.lp-b.lp;}).slice(0,100),
+    aio:qs.filter(function(q){return aioSet.has(q.key.toLowerCase());}).sort(function(a,b){return b.li-a.li;}).slice(0,100)
+  };
+  var cur=sets[S.kw]||sets.top;
+  var tabDefs=[{id:'top',l:'Top impressions'},{id:'gainers',l:'Click gainers'},{id:'losers',l:'Click losers'},{id:'opps',l:'Opportunities'},{id:'page1',l:'Page 1'},{id:'aio',l:'\uD83E\uDD16 AI Overview'}];
+
+  // Header
+  var html='<div style="font-size:10px;color:#666;margin-bottom:10px">'
+    +'Period [GSC]: '+esc(dr)+(g.hasComparison?' \u00b7 vs previous period':'')
+    +(mktKey!=='all'?' \u00b7 <span style="color:#E91E8C">'+esc(MARKETS[mktKey]?MARKETS[mktKey].label:mktKey)+'</span>':'')
+    +(aioSet.size>0?' \u00b7 <span style="color:#9B59B6">\uD83E\uDD16 '+aioSet.size+' queries in AI Overviews</span>':'')
+    +'</div>';
+
+  // Search bar
+  html+='<div style="background:var(--bg2);border:1px solid #333;border-radius:11px;padding:10px 13px;margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<input id="kwSearch" type="text" placeholder="Search keywords or page URLs\u2026" value="'+esc(S.kwSearch||'')+'" style="flex:1;min-width:200px;height:32px">'
+    +((searchVal||activeUrl)?'<button id="kwClearAll" style="font-size:11px;color:#888;border-color:#444;padding:4px 10px">Clear filters</button>':'')
+    +'</div>';
+
+  // Active URL indicator
+  if(activeUrl){
+    html+='<div class="kw-url-filter"><span>Filtered to URL:</span><code>'+esc(activeUrl.replace(/^https?:\/\/[^/]+/,''))+'</code><button id="kwClearUrl">\u2715</button></div>';
+  }
+
+  // Tab buttons
+  html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">';
+  tabDefs.forEach(function(t){
+    var count=sets[t.id]?sets[t.id].length:0;
+    var isAio=t.id==='aio';
+    html+='<button class="tb'+(S.kw===t.id?' on':'')+'" data-kw="'+t.id+'" style="font-size:11px'+(isAio?';color:#9B59B6':'')+'">'
+      +t.l+' ('+count+')'
+      +'</button>';
+  });
+  html+='</div>';
+
+  if(!cur.length){
+    html+='<div class="empty">No keywords match your filters'+(searchVal?' for "'+esc(searchVal)+'"':'')+'</div>';
+    $('tc').innerHTML=html;
+    _bindKwEvents();
+    return;
+  }
+
+  // Table
+  var hasCmp=g.hasComparison&&S.compareMode;
+  html+='<div class="tbl"><table>';
+  html+='<thead><tr>';
+  html+='<th>URL'+(hasPageData?' <span style="color:#444;font-weight:400;text-transform:none;font-size:8px">(click to filter)</span>':'')+'</th>';
+  html+='<th>Keyword</th>';
+  html+='<th class="r">Impr.</th>';
+  html+='<th class="r">Clicks</th>';
+  html+='<th class="r">CTR</th>';
+  html+='<th class="r">Position</th>';
+  if(hasCmp) html+='<th class="r">Pos. change</th>';
+  html+='<th class="r">AIO</th>';
+  html+='</tr></thead><tbody>';
+
+  cur.forEach(function(q){
+    var d=q.pp>0&&q.lp>0?q.pp-q.lp:null;
+    var pageRaw=q.page||'';
+    var pageDisplay=pageRaw.replace(/^https?:\/\/[^/]+/,'');
+    if(!pageDisplay)pageDisplay=pageRaw;
+    var isActive=activeUrl&&q.page===activeUrl;
+    var posCol=q.lp>0&&q.lp<=3?'#E91E8C':q.lp<=10?'#27AE60':'#888';
+    var clicksCol=q.lc>q.pc?'#27AE60':q.lc>0?'#F0F0F0':'#555';
+    var inAIO=aioSet.has(q.key.toLowerCase());
+    // Flag low CTR queries in AI Overviews — potential click cannibalization
+    var ctrVal=parseFloat(q.lctr);
+    var aioCannibal=inAIO&&q.lp<=10&&ctrVal<2;
+
+    html+='<tr'+(aioCannibal?' style="background:rgba(155,89,182,.07)"':'')+'>';
+
+    // URL column
+    if(hasPageData&&pageRaw){
+      html+='<td class="url-cell">'
+        +'<button class="url-btn'+(isActive?' active':'')+'" data-kwurl="'+esc(pageRaw)+'" title="'+esc(pageDisplay)+'">'
+        +esc(pageDisplay.length>36?pageDisplay.slice(0,34)+'\u2026':pageDisplay)
+        +'</button></td>';
+    } else {
+      html+='<td style="color:#444;font-size:10px">\u2014</td>';
+    }
+
+    html+='<td style="font-family:monospace;font-size:10.5px;color:#F0F0F0;max-width:280px;overflow:hidden;text-overflow:ellipsis" title="'+esc(q.key)+'">'+esc(q.key)+'</td>';
+    html+='<td class="r" style="color:#888">'+q.li.toLocaleString()+'</td>';
+    html+='<td class="r" style="color:'+clicksCol+'">'+q.lc+'</td>';
+    html+='<td class="r" style="color:'+(aioCannibal?'#E05C3A':'#555')+'"'+(aioCannibal?' title="Low CTR — AI Overview may be intercepting clicks"':'')+'>'+esc(q.lctr)+'</td>';
+    html+='<td class="r" style="color:'+posCol+';font-weight:'+(q.lp>0&&q.lp<=3?'700':'400')+'">'+(q.lp>0?q.lp.toFixed(1):'\u2014')+'</td>';
+    if(hasCmp){
+      var dStr=d!==null?(d>0?'+':'')+d.toFixed(1):'\u2014';
+      html+='<td class="r" style="color:'+(d!==null?dcol(d):'#444')+';font-weight:'+(d!==null?'700':'400')+'">'+dStr+'</td>';
+    }
+    html+='<td class="r">'+(inAIO?'<span style="font-size:11px" title="Appears in AI Overview">\uD83E\uDD16</span>':'<span style="color:#333">\u2014</span>')+'</td>';
+    html+='</tr>';
+  });
+
+  html+='</tbody></table></div>';
+  $('tc').innerHTML=html;
+  _bindKwEvents();
+}
+/* placeholder removed */
+var _kwPlaceholder=true;
+
+
+
+
+function _bindKwEvents(){
+  // Tab buttons
+  document.querySelectorAll('[data-kw]').forEach(function(btn){
+    btn.onclick=function(){S.kw=btn.getAttribute('data-kw');tabKeywords();};
+  });
+
+  // Search input — searches query text AND URLs
+  var srch=$('kwSearch');
+  if(srch){
+    srch.oninput=function(){
+      S.kwSearch=srch.value;
+      clearTimeout(S._kwT);
+      S._kwT=setTimeout(tabKeywords,300);
+    };
+    // Focus search bar on load so user can type immediately
+    srch.focus();
+  }
+
+  // Clear all filters
+  var clearAll=$('kwClearAll');
+  if(clearAll){
+    clearAll.onclick=function(){S.kwSearch='';S.kwActiveUrl=null;tabKeywords();};
+  }
+
+  // Clear URL filter
+  var clearUrl=$('kwClearUrl');
+  if(clearUrl){
+    clearUrl.onclick=function(){S.kwActiveUrl=null;tabKeywords();};
+  }
+
+  // Clickable URL buttons — toggle drill-down
+  document.querySelectorAll('[data-kwurl]').forEach(function(btn){
+    btn.onclick=function(){
+      var url=btn.getAttribute('data-kwurl');
+      S.kwActiveUrl=(S.kwActiveUrl===url)?null:url;
+      tabKeywords();
+    };
+  });
+}
+/* AI TAKEAWAYS */
+function tabTakeaways(){
+  if(!S.gsc&&!S.ga4){$('tc').innerHTML='<div class="empty">Upload data first</div>';return;}
+  if(S.ta){showTA();return;}
+  var g=S.gsc,a=S.ga4;
+  $('tc').innerHTML='<div style="text-align:center;padding:50px 20px">'
+    +(g?'<div style="font-size:13px;color:#888;margin-bottom:5px">GSC: '+g.pages.length+' pages \u00b7 '+g.queries.length+' queries'+(a?' \u00b7 GA4: '+a.rows.length+' pages':'')+'</div>':'')
+    +(g?'<div style="font-size:11px;color:#555;margin-bottom:6px">Period: '+(g.ds?drange(g.ds,g.de):g.dateRange)+(g.hasComparison?' (with comparison)':'')+'</div>':'')
+    +'<div style="font-size:11px;color:#555;margin-bottom:24px;line-height:1.7">Claude will analyse your GSC + GA4 data and generate insights or a full PDF report</div>'
+    +'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
+    +'<button class="bp" id="genBtn" onclick="runTA()" style="font-size:13px">Generate AI takeaways \u2192</button>'
+    +'<button id="genReportBtn" onclick="runReport()" style="background:#1A1A1A;border:1px solid #444;color:#aaa;border-radius:8px;padding:11px 22px;font-size:13px;cursor:pointer">\uD83D\uDCC4 Generate full report PDF</button>'
+    +'</div>'
+    +'<div id="reportStatus" style="font-size:11px;color:#555;margin-top:14px;min-height:18px"></div>'
+    +'</div>';
+}
+window.runTA=function(){
+  var btn=$('genBtn');if(btn){btn.disabled=true;btn.textContent='Analysing...';}
+  var g=S.gsc,a=S.ga4;
+  var tp=g?g.pages.slice().sort(function(a,b){return b.li-a.li;}).slice(0,14):[];
+  var gn=g?g.pages.filter(function(p){return p.lp>0&&p.pp>0&&p.pp>p.lp;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,6):[];
+  var ls=g?g.pages.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,5):[];
+  var tq=g?g.queries.slice().sort(function(a,b){return b.li-a.li;}).slice(0,10):[];
+  var op=g?g.queries.filter(function(q){return q.li>200&&q.lp>10&&q.lp<35;}).sort(function(a,b){return b.li-a.li;}).slice(0,6):[];
+  var gm=a?a.rows.filter(function(r){return r.pageType==='bofu'||r.pageType==='Money Page';}).sort(function(a,b){return b.views-a.views;}).slice(0,10):[];
+  var lc=0,pc=0,li=0,pi=0;if(g){g.pages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});}
+  var tv=0,tk=0,tvp=0,tkp=0;gm.forEach(function(r){tv+=r.views;tk+=r.keyEvents;tvp+=r.viewsPrev||0;tkp+=r.keyEventsPrev||0;});
+  var dr=g?(g.ds?drange(g.ds,g.de):g.dateRange):'last period';
+  var mktKey=S.market||'all',mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
+  var prompt='Expert SEO analyst for '+(g?g.site:'casinos.com')+' ('+mktLabel+'), period: '+dr+(g&&g.hasComparison?' vs previous period':'')+'.\n\nGSC: Clicks '+pc.toLocaleString()+'\u2192'+lc.toLocaleString()+' ('+pct(lc,pc)+'%) | Impr '+pi.toLocaleString()+'\u2192'+li.toLocaleString()+' ('+pct(li,pi)+'%)\n\nPAGES:\n'+tp.map(function(p){return slug(p.key)+'|'+p.pc+'\u2192'+p.lc+'cl|'+p.pp.toFixed(1)+'\u2192'+p.lp.toFixed(1)+'pos|'+p.li.toLocaleString()+'impr|type:'+getPageType(p.key);}).join('\n')+'\n\nGAINERS: '+gn.map(function(p){return slug(p.key)+' +'+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\nDECLINERS: '+ls.map(function(p){return slug(p.key)+' '+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\n\nQUERIES: '+tq.map(function(q){return'"'+q.key+'" '+q.li.toLocaleString()+'impr '+q.lc+'cl pos'+q.lp.toFixed(1);}).join(' | ')+'\nOPPS: '+op.map(function(q){return'"'+q.key+'" '+q.li.toLocaleString()+'impr pos'+q.lp.toFixed(1);}).join(' | ')+(gm.length?'\n\nGA4: '+tv.toLocaleString()+'v vs '+tvp.toLocaleString()+'v | '+tk.toLocaleString()+'ke vs '+tkp.toLocaleString()+'ke\n'+gm.map(function(r){return r.page+' '+r.views+'v(prev:'+(r.viewsPrev||0)+'v) '+r.keyEvents+'ke(prev:'+(r.keyEventsPrev||0)+'ke) '+(r.views>0?(r.keyEvents/r.views*100).toFixed(1):0)+'%';}).join('\n'):'')+'\n\nReply EXACTLY:\n## Executive summary\n[2 sentences]\n\n## What is working\n- [finding with data]\n\n## Concerns\n- [concern with data]\n\n## Actions for the team\n1. [action]\n2. [action]\n3. [action]\n\n## Keyword opportunities\n- [query: insight]';
+  fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:900,messages:[{role:'user',content:prompt}]})})
+  .then(function(r){return r.json();}).then(function(d){S.ta=d.content&&d.content.length>0?d.content.map(function(c){return c.text||'';}).join(''):(d.error?'API Error: '+JSON.stringify(d.error):'No response \u2014 check ANTHROPIC_API_KEY.');showTA();}).catch(function(e){S.ta='Error: '+e.message;showTA();});
+};
+window.runReport=function(){
+  var btn=document.getElementById('genReportBtn'),status=document.getElementById('reportStatus');
+  if(btn){btn.disabled=true;btn.textContent='Generating report...';}
+  if(status)status.textContent='Preparing data for Claude...';
+  var g=S.gsc,a=S.ga4,mktKey=S.market||'all';
+  var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
+  var dr=g?(g.ds?drange(g.ds,g.de):g.dateRange):'last period';
+  var lc=0,pc=0,li=0,pi=0;if(g){g.pages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});}
+  var bofuPgs=g?g.pages.filter(function(p){var t=getPageType(p.key);return t==='bofu'||t==='state';}).sort(function(a,b){return b.li-a.li;}).slice(0,20):[];
+  var gainers=g?g.pages.filter(function(p){return p.lp>0&&p.pp>0&&p.pp>p.lp;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,8):[];
+  var decliners=g?g.pages.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,8):[];
+  var opps=g?g.queries.filter(function(q){return q.lp>=10&&q.lp<=20&&q.li>=100&&parseFloat(q.lctr)<3;}).sort(function(a,b){return b.li-a.li;}).slice(0,10):[];
+  if(a)a.rows.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'other';});
+  var mPgs=a?a.rows.filter(function(r){return r.pageType==='bofu'||r.pageType==='casino'||r.pageType==='state'||r.pageType==='Money Page';}).sort(function(a,b){return b.views-a.views;}).slice(0,12):[];
+  var totV=0,totKE=0,totVP=0,totKEP=0;mPgs.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
+  var ga4sec='';
+  if(a&&mPgs.length){ga4sec='GA4 MONEY PAGES:\nTotal views: '+totV+' vs '+totVP+' ('+pct(totV,totVP)+'%)\nTotal exit clicks: '+totKE+' vs '+totKEP+' ('+pct(totKE,totKEP)+'%)\n';ga4sec+=mPgs.map(function(r){var cv=r.views>0?(r.keyEvents/r.views*100).toFixed(1):0;var cvp=(r.viewsPrev||0)>0?((r.keyEventsPrev||0)/(r.viewsPrev)*100).toFixed(1):0;return r.page+'|views:'+(r.viewsPrev||0)+'->'+r.views+'|eng:'+(r.engTime||0).toFixed(0)+'s|exitclicks:'+(r.keyEventsPrev||0)+'->'+r.keyEvents+'|conv:'+cvp+'%->'+cv+'%';}).join('\n');}
+  var prompt='You are an expert SEO analyst for casinos.com. Generate a professional SEO performance report in markdown.\n\nMARKET: '+mktLabel+'\nPERIOD: '+dr+(g&&g.hasComparison?' vs previous period':'')+'\n\nGSC SUMMARY:\nClicks: '+pc.toLocaleString()+'->'+lc.toLocaleString()+' ('+pct(lc,pc)+'%) | Impressions: '+pi.toLocaleString()+'->'+li.toLocaleString()+' ('+pct(li,pi)+'%)\n\nBOFU & STATE PAGES [GSC]:\n'+bofuPgs.map(function(p){return slug(p.key)+'|pos:'+p.pp.toFixed(1)+'->'+p.lp.toFixed(1)+'|clicks:'+p.pc+'->'+p.lc+'|impr:'+p.li+'|type:'+getPageType(p.key);}).join('\n')+'\n\nPOSITION GAINERS: '+gainers.map(function(p){return slug(p.key)+' +'+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\nPOSITION DECLINERS: '+decliners.map(function(p){return slug(p.key)+' '+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\n\nKEYWORD OPPORTUNITIES [GSC] (pos 10-20, 100+ impr, CTR<3%):\n'+opps.map(function(q){return '"'+q.key+'" impr:'+q.li+' pos:'+q.lp.toFixed(1)+' ctr:'+q.lctr;}).join('\n')+(ga4sec?'\n\n'+ga4sec:'')+'\n\nWrite the report with EXACTLY these ## sections:\n## Executive Summary\n## GSC Performance\n## BOFU & State Page Analysis\n## GA4 Engagement & Exit Clicks\n## Keyword Opportunities\n## What Is Working\n## Priority Actions\n(number actions 1-5, be specific with page names and data)';
+  fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var text=d.content&&d.content.length>0?d.content.map(function(c){return c.text||'';}).join(''):(d.error?'Error: '+JSON.stringify(d.error):'No response');
+    S.reportMd=text;if(btn){btn.disabled=false;btn.textContent='\uD83D\uDCC4 Generate full report PDF';}
+    if(status)status.innerHTML='<span style="color:#27AE60">\u2713 Report ready \u2014 <a href="#" onclick="downloadReportPDF();return false;" style="color:#E91E8C">Download PDF</a></span>';
+    downloadReportPDF();
+  })
+  .catch(function(e){if(btn){btn.disabled=false;btn.textContent='\uD83D\uDCC4 Generate full report PDF';}if(status)status.innerHTML='<span style="color:#E05C3A">Error: '+esc(e.message)+'</span>';});
+};
+window.downloadReportPDF=function(){
+  if(!S.reportMd){window.runReport();return;}
+  var md=S.reportMd,mktKey=S.market||'all',mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
+  var g=S.gsc,dr=g?(g.ds?drange(g.ds,g.de):g.dateRange):'';
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:system-ui,sans-serif;color:#111;font-size:13px;line-height:1.7;max-width:820px;margin:0 auto;padding:30px}h1{font-size:20px;color:#E91E8C;border-bottom:2px solid #E91E8C;padding-bottom:8px;margin:0 0 16px}h2{font-size:14px;font-weight:700;color:#111;margin:22px 0 8px;padding:5px 10px;background:#f5f5f5;border-left:3px solid #E91E8C}p{margin:0 0 9px}ul,ol{padding-left:20px;margin:0 0 10px}li{margin-bottom:3px}strong{font-weight:700}.cover{background:#111;color:#fff;padding:22px;border-radius:6px;margin-bottom:22px}.cover h1{color:#E91E8C;border-color:#E91E8C;font-size:18px}.cover p{color:#888;font-size:11px;margin:3px 0}@media print{body{padding:0}}</style></head><body>'
+    +'<div class="cover"><h1>casinos.com SEO Report</h1><p>'+esc(mktLabel)+' &middot; '+esc(dr)+'</p><p>Generated '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})+'</p><p style="font-size:10px;color:#555;margin-top:8px">[GSC] = Google Search Console &nbsp;&middot;&nbsp; [GA4] = Google Analytics 4</p></div>';
+  var lines=md.split('\n');var inList=false,listType='';
+  lines.forEach(function(line){if(line.startsWith('# ')){if(inList){html+='</'+listType+'>';inList=false;}html+='<h1>'+esc(line.slice(2))+'</h1>';}else if(line.startsWith('## ')){if(inList){html+='</'+listType+'>';inList=false;}html+='<h2>'+esc(line.slice(3))+'</h2>';}else if(/^\d+\.\s/.test(line)){if(!inList||listType!=='ol'){if(inList)html+='</'+listType+'>';html+='<ol>';inList=true;listType='ol';}html+='<li>'+esc(line.replace(/^\d+\.\s/,''))+'</li>';}else if(line.startsWith('- ')||line.startsWith('* ')){if(!inList||listType!=='ul'){if(inList)html+='</'+listType+'>';html+='<ul>';inList=true;listType='ul';}html+='<li>'+esc(line.slice(2))+'</li>';}else if(line.trim()===''){if(inList){html+='</'+listType+'>';inList=false;}}else{if(inList){html+='</'+listType+'>';inList=false;}if(line.trim())html+='<p>'+line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')+'</p>';}});
+  if(inList)html+='</'+listType+'>';
+  html+='<p style="font-size:10px;color:#aaa;margin-top:28px;border-top:1px solid #eee;padding-top:8px">casinos.com SEO Report &mdash; CONFIDENTIAL</p></body></html>';
+  var w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},600);}
+};
+function showTA(){
+  var ST={'Executive summary':{bg:'rgba(233,30,140,.07)',bc:'#E91E8C',tc:'#F48FB1'},'What is working':{bg:'rgba(39,174,96,.07)',bc:'#27AE60',tc:'#2ECC71'},'Concerns':{bg:'rgba(224,92,58,.07)',bc:'#E05C3A',tc:'#E8896A'},'Actions for the team':{bg:'rgba(255,255,255,.04)',bc:'#555',tc:'#ccc'},'Keyword opportunities':{bg:'rgba(255,255,255,.04)',bc:'#444',tc:'#aaa'}};
+  var g=S.gsc,dr=g?(g.ds?drange(g.ds,g.de):g.dateRange):'';
+  var secs=S.ta.split(/^## /m).filter(Boolean);
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div style="font-size:9px;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:.1em">'+(g?esc(g.site)+' \u00b7 '+esc(g.market)+' \u00b7 ':'')+esc(dr)+'</div><button onclick="S.ta=null;tabTakeaways()" style="font-size:11px;padding:4px 10px">Regenerate</button></div>';
+  secs.forEach(function(sec){var parts=sec.split('\n'),title=parts[0].trim(),body=parts.slice(1).join('\n').trim();var st=ST[title]||{bg:'rgba(255,255,255,.03)',bc:'#333',tc:'#888'};html+='<div class="tab-box" style="background:'+st.bg+';border-left-color:'+st.bc+'"><div class="tab-h" style="color:'+st.bc+'">'+esc(title)+'</div><div class="tab-b" style="color:'+st.tc+'">'+esc(body)+'</div></div>';});
+  if(!secs.length)html+='<div class="card" style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:#888">'+esc(S.ta)+'</div>';
+  $('tc').innerHTML=html;
+}
+/* UPLOAD SCREEN */
+function renderUpload(){
+  var hasLoaded=S.files.some(function(f){return f.status==='ok';});
+  ROOT.innerHTML='<div class="up"><div style="text-align:center;margin-bottom:24px"><div class="ulogo"><svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg></div><div style="font-size:24px;font-weight:700;color:var(--t);margin-bottom:5px">SEO Dashboard</div><div style="font-size:13px;color:var(--tm)">casinos.com \u00b7 v2.3</div></div>'
+    +'<div style="background:var(--bg2);border:1px solid #333;border-radius:11px;padding:16px 18px;margin-bottom:14px">'
+    +'<div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px">\u26a1 Live data \u2014 no uploads needed</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">'
+    +'<span style="font-size:10px;color:#666">Date range:</span>'
+    +'<select id="dateRangeSel" style="height:28px;border:1px solid #444;border-radius:6px;background:var(--bg3);color:#ccc;font-size:11px;padding:0 8px;font-family:inherit">'+Object.keys(DATE_RANGES).map(function(k){return'<option value="'+k+'"'+(S.dateRange===k?' selected':'')+'>'+DATE_RANGES[k].label+'</option>';}).join('')+'</select>'
+    +'<button id="cmpToggleUp" onclick="S.compareMode=!S.compareMode;renderUpload()" style="height:28px;padding:0 12px;border-radius:6px;border:1px solid '+(S.compareMode?'rgba(233,30,140,.5)':'#444')+';background:'+(S.compareMode?'rgba(233,30,140,.12)':'transparent')+';color:'+(S.compareMode?'#E91E8C':'#555')+';font-size:11px;cursor:pointer">'+(S.compareMode?'\u29cb Compare ON':'\u25a1 Compare OFF')+'</button>'
+    +'<span style="font-size:10px;color:#555" id="rangeHint">'+(S.compareMode?'vs previous equal period':'no comparison')+'</span>'
+    +'</div>'
+    +'<div id="customDates" style="display:'+(S.dateRange==='custom'?'flex':'none')+';flex-direction:column;gap:6px;background:var(--bg3);border:1px solid #333;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:10px;color:#888;width:90px">Current period</span><input type="date" id="cStart" value="'+(S.customStart||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#F0F0F0;font-size:10px;padding:0 6px;font-family:inherit"><span style="font-size:10px;color:#555">to</span><input type="date" id="cEnd" value="'+(S.customEnd||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#F0F0F0;font-size:10px;padding:0 6px;font-family:inherit"></div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:10px;color:#555;width:90px">Compare to</span><input type="date" id="cPrevStart" value="'+(S.customPrevStart||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#888;font-size:10px;padding:0 6px;font-family:inherit"><span style="font-size:10px;color:#555">to</span><input type="date" id="cPrevEnd" value="'+(S.customPrevEnd||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#888;font-size:10px;padding:0 6px;font-family:inherit"><span style="font-size:10px;color:#555">(optional)</span></div></div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><button id="liveLoadBtn" style="background:var(--pink);color:#fff;border-color:var(--pink);font-weight:700;padding:9px 20px;border-radius:8px;font-size:13px">\u26a1 Load live data</button><span style="font-size:11px;color:#555">then filter by market in the dashboard</span></div>'
+    +'<div id="liveStatus" style="font-size:11px;min-height:18px;margin-top:4px"></div></div>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="flex:1;height:1px;background:#222"></div><span style="font-size:10px;color:#444;white-space:nowrap">OR UPLOAD MANUALLY</span><div style="flex:1;height:1px;background:#222"></div></div>'
+    +'<div class="dz" id="dz"><div style="font-size:13px;font-weight:600;color:var(--t);margin-bottom:4px">Drop GSC .zip or GA4 .csv files here</div><div style="font-size:11px;color:var(--tm)">Click to browse \u00b7 Multiple files \u00b7 Comparison exports auto-detected</div><input id="fu" type="file" multiple accept=".zip,.csv" style="display:none"></div>'
+    +'<div id="flist">'+S.files.map(function(f,i){var isZ=f.type==='GSC'||f.type==='LIVE';var sc=f.status==='ok'?'color:#27AE60':f.status==='error'?'color:#E05C3A':'color:#555';return'<div class="fi"><span class="ftag" style="'+(isZ?'color:#E91E8C;background:rgba(233,30,140,.12)':'color:#27AE60;background:rgba(39,174,96,.12)')+'">'+f.type+'</span><span class="fn">'+esc(f.name)+'</span>'+(f.info?'<span class="finfo">'+esc(f.info)+'</span>':'')+'<span class="fst" style="'+sc+'">'+(f.status==='ok'?'\u2713 Loaded':f.status==='error'?'\u2715 Error':'Loading...')+'</span><button class="frm" data-idx="'+i+'">\u2715</button></div>';}).join('')+'</div>'
+    +(hasLoaded?'<div class="analyse-bar"><div style="font-size:12px;color:#888;margin-bottom:10px">'+S.files.filter(function(f){return f.status==='ok';}).length+' file(s) ready'+(S.gsc&&S.gsc.hasComparison?' \u00b7 GSC comparison detected':'')+(S.ga4&&S.ga4.hasComparison?' \u00b7 GA4 comparison detected':'')+'</div><button class="bp" id="analyseBtn">Analyse data \u2192</button></div>':'')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px"><div style="background:rgba(233,30,140,.05);border:1px solid rgba(233,30,140,.15);border-radius:8px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#E91E8C;margin-bottom:6px">GSC zip export</div><div style="font-size:10px;color:#666;line-height:1.6">Search Console \u2192 Performance \u2192 set dates \u2192 enable comparison \u2192 Export.</div></div><div style="background:rgba(39,174,96,.05);border:1px solid rgba(39,174,96,.15);border-radius:8px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#27AE60;margin-bottom:6px">GA4 CSV export</div><div style="font-size:10px;color:#666;line-height:1.6">GA4 \u2192 Reports \u2192 Pages &amp; screens \u2192 add comparison \u2192 Export CSV.</div></div></div></div>';
+  var liveBtn=$('liveLoadBtn');if(liveBtn)liveBtn.onclick=function(){loadLiveData(S.market||'all');};
+  var drSel=$('dateRangeSel');
+  if(drSel)drSel.onchange=function(){S.dateRange=drSel.value;var cd=$('customDates'),hint=$('rangeHint');if(cd)cd.style.display=S.dateRange==='custom'?'flex':'none';if(hint)hint.textContent=S.dateRange==='custom'?'specify periods below':S.compareMode?'vs previous equal period':'no comparison';};
+  function bindDateInput(id,field){var el=$(id);if(el)el.onchange=function(){S[field]=el.value;};}
+  bindDateInput('cStart','customStart');bindDateInput('cEnd','customEnd');bindDateInput('cPrevStart','customPrevStart');bindDateInput('cPrevEnd','customPrevEnd');
+  var dz=$('dz'),fu=$('fu'),ab=$('analyseBtn');
+  if(dz){dz.onclick=function(e){if(e.target!==fu)fu.click();};dz.ondragover=function(e){e.preventDefault();dz.classList.add('drag');};dz.ondragleave=function(){dz.classList.remove('drag');};dz.ondrop=function(e){e.preventDefault();dz.classList.remove('drag');addFiles(e.dataTransfer.files);};}
+  if(fu)fu.onchange=function(){addFiles(fu.files);};
+  if(ab)ab.onclick=function(){S.tab='overview';render();};
+  document.querySelectorAll('[data-idx]').forEach(function(btn){btn.onclick=function(){window.removeFile(+btn.getAttribute('data-idx'));};});
+}
+/* MAIN RENDER */
+function render(){
+  if(!S.gsc&&!S.ga4){renderUpload();return;}
+  var TABS=[{id:'overview',l:'Overview'},{id:'positions',l:'Positions'},{id:'ga4',l:'GA4'},{id:'keywords',l:'Keywords'},{id:'takeaways',l:'AI Takeaways'}];
+  var STAR2='<svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg>';
+  ROOT.innerHTML='<div class="topbar"><div class="lm">'+STAR2+'</div><div><div class="ln">casinos.com</div><span class="ls">SEO Dashboard <span style="font-size:9px;color:#444;font-weight:400">v2.3</span></span></div>'+((S.gsc||S.ga4)?'<div class="dp"><span class="dd"></span>'+esc(dateBadge())+'</div>':'')+(S.gsc&&S.gsc.hasComparison?'<span class="cmp-pill">GSC cmp</span>':'')+(S.ga4&&S.ga4.hasComparison?'<span class="cmp-pill">GA4 cmp</span>':'')+'<div style="flex:1"></div>'
+    +(S.gsc||S.ga4?'<button id="cmpToggle" onclick="S.compareMode=!S.compareMode;render()" style="font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid '+(S.compareMode?'rgba(233,30,140,.5)':'#333')+';background:'+(S.compareMode?'rgba(233,30,140,.12)':'transparent')+';color:'+(S.compareMode?'#E91E8C':'#555')+';margin-right:2px" title="Toggle comparison period">'+(S.compareMode?'\u29cb Compare ON':'\u25a1 Compare OFF')+'</button>':'')
+    +(S.gsc||S.ga4?'<button class="pdf-btn" id="pdfBtn" onclick="downloadPDF()"><svg viewBox="0 0 16 16" style="width:13px;height:13px;fill:currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zm-5 2h10v1.5H3V14z"/></svg>PDF</button>':'')
+    +((S.gsc||S.ga4)?'<select style="height:26px;border:1px solid #333;border-radius:6px;background:var(--bg3);color:#888;font-size:10px;padding:0 6px;margin-right:6px;font-family:inherit" id="topDateSel">'+Object.keys(DATE_RANGES).map(function(k){return'<option value="'+k+'"'+(S.dateRange===k?' selected':'')+'>'+DATE_RANGES[k].label+'</option>';}).join('')+'</select>':'')
+    +(S.dateRange==='custom'&&(S.gsc||S.ga4)?'<div style="display:flex;gap:4px;align-items:center;margin-right:6px;background:rgba(255,255,255,.04);border:1px solid #333;border-radius:8px;padding:3px 8px"><input type="date" id="tbCStart" value="'+(S.customStart||'')+'" style="height:22px;border:none;background:transparent;color:#F0F0F0;font-size:10px;padding:0;font-family:inherit;width:100px"><span style="font-size:9px;color:#444">vs</span><input type="date" id="tbCPrevStart" value="'+(S.customPrevStart||'')+'" style="height:22px;border:none;background:transparent;color:#666;font-size:10px;padding:0;font-family:inherit;width:100px"><button id="tbGoBtn" style="background:var(--pink);color:#fff;border:none;border-radius:5px;padding:2px 8px;font-size:9px;cursor:pointer;font-weight:700">Go</button></div>':'')
+    +((S.gsc||S.ga4)?'<select class="mkt-select" id="mktSelect" style="margin-right:6px">'+Object.keys(MARKETS).map(function(k){return'<option value="'+k+'"'+(S.market===k?' selected':'')+'>'+MARKETS[k].label+'</option>';}).join('')+'</select>':'')
+    +'<button id="backBtn" style="font-size:11px;margin-left:6px">\u27f5 Upload</button></div>'
+    +'<div class="tabnav">'+TABS.map(function(t){return'<button class="tb'+(S.tab===t.id?' on':'')+'" data-tab="'+t.id+'">'+t.l+'</button>';}).join('')+'</div>'
+    +'<div class="main" id="tc"></div>';
+  document.querySelectorAll('[data-tab]').forEach(function(btn){btn.onclick=function(){S.tab=btn.getAttribute('data-tab');render();};});
+  var bb=$('backBtn');if(bb)bb.onclick=function(){S.gsc=null;S.ga4=null;S.files=[];S.ta=null;S.reportMd=null;S.market='all';S.kwSearch='';S.kwActiveUrl=null;renderUpload();};
+  var tds=$('topDateSel');
+  if(tds)tds.onchange=function(){
+    S.dateRange=tds.value;render();
+    var isLive=S.files.length>0&&S.files[0].type==='LIVE';
+    if(S.dateRange!=='custom'&&isLive&&N8N_WEBHOOK_URL&&N8N_WEBHOOK_URL!=='YOUR_N8N_WEBHOOK_URL_HERE')loadLiveData(S.market||'all');
+  };
+  var tbCS=$('tbCStart'),tbCPS=$('tbCPrevStart'),tbGo=$('tbGoBtn');
+  if(tbCS)tbCS.onchange=function(){S.customStart=tbCS.value;};
+  if(tbCPS)tbCPS.onchange=function(){S.customPrevStart=tbCPS.value;};
+  if(tbGo)tbGo.onclick=function(){loadLiveData(S.market||'all');};
+  var ms=$('mktSelect');
+  if(ms)ms.onchange=function(){
+    var newMkt=ms.value;S.market=newMkt;S.ta=null;S.reportMd=null;S.kwActiveUrl=null;
+    var isLive=S.files.length>0&&S.files[0].type==='LIVE';
+    if(isLive&&N8N_WEBHOOK_URL&&N8N_WEBHOOK_URL!=='YOUR_N8N_WEBHOOK_URL_HERE'){
+      var dates2=getDates(S.dateRange||'28d');
+      fetch(N8N_WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({site:'https://www.casinos.com/',market:newMkt.toLowerCase(),startDate:dates2.startDate,endDate:dates2.endDate,prevStartDate:dates2.prevStartDate,prevEndDate:dates2.prevEndDate})})
+      .then(function(r){return r.json();}).then(function(d){if(d.gsc){S.gsc=d.gsc;}if(d.ga4){d.ga4.rows.forEach(function(r){r.pageType=getPageType(r.page)||'other';});S.ga4=d.ga4;}render();}).catch(function(){render();});
+    }else{render();}
+  };
+  doTab();
+}
+function doTab(){if(S.tab==='overview')tabOverview();else if(S.tab==='positions')tabPositions();else if(S.tab==='ga4')tabGA4();else if(S.tab==='keywords')tabKeywords();else if(S.tab==='takeaways')tabTakeaways();}
+/* PDF EXPORT */
+async function downloadPDF(){
+  var btn=$('pdfBtn');if(btn){btn.textContent='Building PDF...';btn.disabled=true;}
+  var g=S.gsc,a=S.ga4;if(!g&&!a){if(btn){btn.textContent='PDF';btn.disabled=false;}return;}
+  var {jsPDF}=window.jspdf;
+  var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  var pw=210,ph=297,mg=14,y=mg,lh=5.5;
+  var PINK=[233,30,140],BLACK=[14,14,14],WHITE=[240,240,240],GREY=[40,40,40],MID=[136,136,136],GRN=[39,174,96],RED=[224,92,58],AMBER=[212,136,42];
+  function sf(size,bold,col){doc.setFontSize(size);doc.setFont('helvetica',bold?'bold':'normal');col=col||WHITE;doc.setTextColor(col[0],col[1],col[2]);}
+  function np(){doc.addPage();y=mg;doc.setFillColor(BLACK[0],BLACK[1],BLACK[2]);doc.rect(0,0,pw,ph,'F');}
+  function cp(need){if(y+need>ph-12)np();}
+  function secHead(title){cp(10);sf(7,true,[85,85,85]);doc.text(title,mg,y);y+=1;doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.rect(mg,y,12,0.5,'F');y+=4;}
+  function ptColor(type){return type==='state'?[93,173,226]:type==='news'?AMBER:type==='bofu'?GRN:type==='casino'?PINK:type==='social'?[155,89,182]:MID;}
+  doc.setFillColor(BLACK[0],BLACK[1],BLACK[2]);doc.rect(0,0,pw,ph,'F');
+  doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.roundedRect(mg,y,pw-mg*2,22,2,2,'F');
+  sf(16,true,BLACK);doc.text('casinos.com SEO Dashboard v2.3',mg+8,y+9);
+  var dateStr=g?(g.ds?fdate(g.ds)+' \u2013 '+fdate(g.de):g.dateRange):'';
+  sf(7,false,BLACK);doc.text(dateStr,pw-mg-2,y+9,{align:'right'});
+  sf(6,false,BLACK);doc.text('Generated '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),pw-mg-2,y+14,{align:'right'});
+  y+=28;
+  if(g){
+    var lc=0,pc=0,li=0,pi=0;g.pages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});
+    var mPDF=a?a.rows.filter(function(r){return r.pageType==='bofu'||r.pageType==='casino'||r.pageType==='state'||r.pageType==='Money Page';}):[];
+    var totV=0,totKE=0,totVP=0,totKEP=0;mPDF.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
+    secHead('OVERVIEW [GSC + GA4]');
+    var cards=[{l:'Clicks',v:fmt(lc),d:pct(lc,pc),ok:g.hasComparison},{l:'Impressions',v:fmt(li),d:pct(li,pi),ok:g.hasComparison},{l:'GA4 Views',v:totV>0?fmt(totV):'\u2014',d:pct(totV,totVP),ok:a&&a.hasComparison&&totVP>0},{l:'Exit Clicks',v:totKE>0?fmt(totKE):'\u2014',d:pct(totKE,totKEP),ok:a&&a.hasComparison&&totKEP>0}];
+    var cw=(pw-mg*2-6)/4,cx=mg;
+    cards.forEach(function(c){doc.setFillColor(GREY[0],GREY[1],GREY[2]);doc.roundedRect(cx,y,cw,20,1.5,1.5,'F');doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.roundedRect(cx,y,cw,1.5,1,1,'F');sf(6.5,false,MID);doc.text(c.l,cx+3,y+6);sf(14,true,WHITE);doc.text(c.v,cx+3,y+14);if(c.ok){var d=parseFloat(c.d),col=d>=0?GRN:RED;sf(7,true,col);doc.text((d>=0?'\u2191':'\u2193')+Math.abs(d)+'%',cx+3,y+18);}cx+=cw+2;});
+    y+=24;
+    secHead('POSITION MOVEMENT [GSC]');
+    var posPages=g.pages.filter(function(p){return matchMarket(p.key,S.market||'all');}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,40);
+    doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6,true,BLACK);doc.text('Type',mg+2,y);doc.text('Page',mg+18,y);if(g.hasComparison){doc.text('Prev',mg+112,y,{align:'right'});doc.text('Curr',mg+124,y,{align:'right'});doc.text('Chg',mg+138,y,{align:'right'});}doc.text('Clicks',mg+152,y,{align:'right'});doc.text('Impr.',pw-mg-2,y,{align:'right'});y+=lh;
+    posPages.forEach(function(p,i){cp(6);var d=p.pp>0&&p.lp>0?p.pp-p.lp:null;doc.setFillColor(i%2===0?22:28,i%2===0?22:28,i%2===0?22:28);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');var ptc=ptColor(getPageType(p.key));doc.setFillColor(ptc[0],ptc[1],ptc[2]);doc.roundedRect(mg+1,y-2.5,14,4,1,1,'F');sf(5.5,true,BLACK);doc.text((PTC[getPageType(p.key)]||PTC.other).label.slice(0,6),mg+8,y,{align:'center'});sf(6.5,false,WHITE);doc.text(slug(p.key).slice(0,52),mg+18,y);if(g.hasComparison){sf(6.5,false,MID);doc.text(p.pp>0?p.pp.toFixed(1):'\u2014',mg+112,y,{align:'right'});sf(6.5,false,WHITE);doc.text(p.lp>0?p.lp.toFixed(1):'\u2014',mg+124,y,{align:'right'});if(d!=null){sf(6.5,true,d>0?GRN:d<0?RED:MID);doc.text((d>0?'+':'')+d.toFixed(1),mg+138,y,{align:'right'});}}sf(6.5,false,p.lc>p.pc?GRN:WHITE);doc.text(fmt(p.lc),mg+152,y,{align:'right'});sf(6.5,false,MID);doc.text(fmt(p.li),pw-mg-2,y,{align:'right'});y+=lh;});y+=4;
+  }
+  if(a&&a.rows.length){
+    np();secHead('GA4 TRAFFIC & EXIT CLICKS [GA4]');
+    var ga4Rows=a.rows.slice().sort(function(a,b){return b.views-a.views;}).slice(0,50);
+    doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6,true,BLACK);doc.text('Type',mg+2,y);doc.text('Page',mg+18,y);doc.text('Views',mg+108,y,{align:'right'});if(a.hasComparison)doc.text('Prev',mg+120,y,{align:'right'});doc.text('Exit Cl.',mg+132,y,{align:'right'});doc.text('Conv%',mg+148,y,{align:'right'});doc.text('Eng.',pw-mg-2,y,{align:'right'});y+=lh;
+    ga4Rows.forEach(function(r,i){cp(6);var cv=r.views>0?r.keyEvents/r.views*100:0;doc.setFillColor(i%2===0?22:28,i%2===0?22:28,i%2===0?22:28);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');var ptc=ptColor(getPageType(r.page));doc.setFillColor(ptc[0],ptc[1],ptc[2]);doc.roundedRect(mg+1,y-2.5,14,4,1,1,'F');sf(5.5,true,BLACK);doc.text((PTC[getPageType(r.page)]||PTC.other).label.slice(0,6),mg+8,y,{align:'center'});sf(6.5,false,WHITE);doc.text(r.page.slice(0,52),mg+18,y);sf(6.5,false,WHITE);doc.text(fmt(r.views),mg+108,y,{align:'right'});if(a.hasComparison){sf(6.5,false,MID);doc.text(fmt(r.viewsPrev||0),mg+120,y,{align:'right'});}sf(6.5,false,r.keyEvents>=50?PINK:WHITE);doc.text(fmt(r.keyEvents),mg+132,y,{align:'right'});var cvCol=cv>=25?GRN:cv>=12?PINK:cv<3&&r.views>50?RED:WHITE;sf(6.5,true,cvCol);doc.text(cv.toFixed(1)+'%',mg+148,y,{align:'right'});sf(6.5,false,MID);doc.text(fmtTime(r.engTime),pw-mg-2,y,{align:'right'});y+=lh;});y+=4;
+  }
+  if(g&&g.queries.length){
+    np();secHead('KEYWORDS [GSC]');
+    var topQ=g.queries.slice().sort(function(a,b){return b.li-a.li;}).slice(0,25);
+    doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6,true,BLACK);doc.text('Query',mg+2,y);doc.text('Impr.',mg+95,y,{align:'right'});doc.text('Clicks',mg+113,y,{align:'right'});doc.text('CTR',mg+127,y,{align:'right'});doc.text('Pos.',mg+143,y,{align:'right'});doc.text('Chg',pw-mg-2,y,{align:'right'});y+=lh;
+    topQ.forEach(function(q,i){cp(6);var d=q.pp>0&&q.lp>0?q.pp-q.lp:null;doc.setFillColor(i%2===0?22:28,i%2===0?22:28,i%2===0?22:28);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6.5,false,WHITE);doc.text(q.key.slice(0,55),mg+2,y);sf(6.5,false,MID);doc.text(q.li.toLocaleString(),mg+95,y,{align:'right'});sf(6.5,false,q.lc>0?WHITE:MID);doc.text(String(q.lc),mg+113,y,{align:'right'});sf(6.5,false,MID);doc.text(q.lctr,mg+127,y,{align:'right'});sf(6.5,false,q.lp>0&&q.lp<=3?PINK:q.lp<=10?GRN:MID);doc.text(q.lp>0?q.lp.toFixed(1):'\u2014',mg+143,y,{align:'right'});if(d!=null){sf(6.5,true,d>0?GRN:d<0?RED:MID);doc.text((d>0?'+':'')+d.toFixed(1),pw-mg-2,y,{align:'right'});}y+=lh;});
+  }
+  if(S.ta){
+    np();secHead('AI TAKEAWAYS');
+    S.ta.split(/^## /m).filter(Boolean).forEach(function(sec){var parts=sec.split('\n'),title=parts[0].trim(),body=parts.slice(1).join('\n').trim();cp(18);doc.setFillColor(GREY[0],GREY[1],GREY[2]);doc.roundedRect(mg,y,pw-mg*2,9,1,1,'F');doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.roundedRect(mg,y,2,9,1,1,'F');sf(7.5,true,PINK);doc.text(title,mg+5,y+6);y+=11;var wrapped=doc.splitTextToSize(body,pw-mg*2-4);sf(6.5,false,[180,180,180]);for(var li3=0;li3<Math.min(wrapped.length,8);li3++){cp(lh+1);doc.text(wrapped[li3],mg+3,y);y+=lh;}y+=4;});
+  }
+  var nPages=doc.internal.getNumberOfPages();
+  for(var pg=1;pg<=nPages;pg++){doc.setPage(pg);doc.setFillColor(20,20,20);doc.rect(0,ph-8,pw,8,'F');sf(5.5,false,[60,60,60]);doc.text('casinos.com SEO Dashboard v2.3 \u2014 Confidential',mg,ph-3);doc.text('Page '+pg+' of '+nPages,pw-mg,ph-3,{align:'right'});}
+  doc.save('casinos-seo-'+new Date().toISOString().split('T')[0]+'.pdf');
+  if(btn){btn.innerHTML='<svg viewBox="0 0 16 16" style="width:13px;height:13px;fill:currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zm-5 2h10v1.5H3V14z"/></svg> PDF';btn.disabled=false;}
+}
+window.downloadPDF=downloadPDF;
+renderUpload();
+</script>
+</body>
+</html>
