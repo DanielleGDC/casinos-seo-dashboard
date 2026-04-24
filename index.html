@@ -94,7 +94,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market:'all',dateRange:'28d',
   customStart:'',customEnd:'',customPrevStart:'',customPrevEnd:'',reportMd:null,
   kwSearch:'',kwActiveUrl:null,ga4Sort:'ke',ga4SortCol:'ke',compareMode:true,
-  cwvData:{},cwvRunning:false,cwvStrategy:'mobile',cwvLastRaw:null};
+  cwvData:{},cwvRunning:false,cwvStrategy:'mobile',cwvLastRaw:null,cwvApiKey:(function(){try{return localStorage.getItem('cwv_api_key')||'';}catch(e){return'';}}())};
 var MARKETS={
   all:   {label:'All markets',       prefix:null},
   gx:    {label:'\uD83C\uDF0D GX / Global',    prefix:null, gx:true},
@@ -801,10 +801,9 @@ function tabCWV(){
   html+='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">';
   html+='<div>';
   html+='<div style="font-size:13px;font-weight:700;color:#F0F0F0;margin-bottom:3px">\u26a1 Core Web Vitals</div>';
-  html+='<div style="font-size:11px;color:#555">Live data from Google PageSpeed Insights \u00b7 No API key needed</div>';
+  html+='<div style="font-size:11px;color:#555">Live data from Google PageSpeed Insights</div>';
   html+='</div>';
   html+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
-  // Strategy toggle
   html+='<div style="display:flex;background:var(--bg3);border:1px solid #333;border-radius:7px;overflow:hidden">';
   html+='<button onclick="S.cwvStrategy=\'mobile\';tabCWV()" style="border:none;border-radius:0;padding:5px 12px;font-size:11px;background:'+(S.cwvStrategy==='mobile'?'#E91E8C':'transparent')+';color:'+(S.cwvStrategy==='mobile'?'#fff':'#888')+'">\uD83D\uDCF1 Mobile</button>';
   html+='<button onclick="S.cwvStrategy=\'desktop\';tabCWV()" style="border:none;border-radius:0;padding:5px 12px;font-size:11px;background:'+(S.cwvStrategy==='desktop'?'#E91E8C':'transparent')+';color:'+(S.cwvStrategy==='desktop'?'#fff':'#888')+'">\uD83D\uDDA5 Desktop</button>';
@@ -816,13 +815,19 @@ function tabCWV(){
   }
   html+='</div></div>';
 
-  // Custom URL checker
-  html+='<div style="margin-top:12px;display:flex;gap:8px;align-items:center">';
-  html+='<input id="cwvCustomUrl" type="text" placeholder="Check any URL e.g. /us/bonus/200-no-deposit-bonus-200-free-spins" style="flex:1;height:30px;font-size:11px">';
-  html+='<button onclick="runCWVSingle()" style="height:30px;padding:0 14px;font-size:11px;border-radius:6px;border:1px solid #444;color:#aaa;background:var(--bg3);cursor:pointer">Check URL</button>';
+  // API Key + Custom URL row
+  var savedKey=S.cwvApiKey||'';
+  html+='<div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+  html+='<span style="font-size:10px;color:#555;white-space:nowrap">API Key:</span>';
+  html+='<input id="cwvApiKeyInput" type="password" placeholder="Paste free Google PageSpeed API key (console.cloud.google.com)" value="'+esc(savedKey)+'" style="flex:1;min-width:200px;height:28px;font-size:10px;border:1px solid '+(savedKey?'rgba(39,174,96,.4)':'#333')+'">';
+  html+='<button onclick="S.cwvApiKey=$(\'cwvApiKeyInput\').value;try{localStorage.setItem(\'cwv_api_key\',S.cwvApiKey);}catch(e){}tabCWV()" style="height:28px;padding:0 10px;font-size:10px;border-radius:6px;border:1px solid #444;color:#aaa;background:var(--bg3);cursor:pointer;white-space:nowrap">\u2713 Save</button>';
+  html+='<input id="cwvCustomUrl" type="text" placeholder="Check any URL e.g. /us/bonus/..." style="flex:1;min-width:180px;height:28px;font-size:10px">';
+  html+='<button onclick="runCWVSingle()" style="height:28px;padding:0 12px;font-size:10px;border-radius:6px;border:1px solid #444;color:#aaa;background:var(--bg3);cursor:pointer;white-space:nowrap">Check URL</button>';
   html+='</div>';
 
-  html+='<div id="cwvProgress" style="font-size:10px;color:#555;margin-top:8px;min-height:14px"></div>';
+  html+='<div id="cwvProgress" style="font-size:10px;color:#555;margin-top:8px;min-height:14px">'
+    +(!S.cwvApiKey?'<span style="color:#D4882A">\u26a0 No API key set \u2014 paste your free Google PageSpeed API key above to avoid rate limits</span>':'')
+    +'</div>';
   // Debug button — shows raw API response to diagnose issues
   if(S.cwvLastRaw){
     html+='<details style="margin-top:6px"><summary style="font-size:10px;color:#444;cursor:pointer">Show raw API response (debug)</summary>'
@@ -993,7 +998,8 @@ function _checkCWVQueue(urls,idx){
 function _fetchCWV(url,cb){
   var apiUrl='https://www.googleapis.com/pagespeedonline/v5/runPagespeed'
     +'?url='+encodeURIComponent(url)
-    +'&strategy='+S.cwvStrategy;
+    +'&strategy='+S.cwvStrategy
+    +(S.cwvApiKey?'&key='+encodeURIComponent(S.cwvApiKey):'');
   // Note: no &category=performance filter — get full response
 
   fetch(apiUrl)
