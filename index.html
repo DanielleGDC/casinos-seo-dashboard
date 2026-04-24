@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Casinos.com — SEO Dashboard v2.3</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%23E91E8C'/%3E%3Cpath d='M18 4C18 4 20 13 26 18C20 23 18 32 18 32C18 32 16 23 10 18C16 13 18 4 18 4ZM4 18C4 18 13 16 18 10C23 16 32 18 32 18C32 18 23 20 18 26C13 20 4 18 4 18Z' fill='white'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect width='36' height='36' rx='8' fill='%231A1A1A'/%3E%3Crect x='4' y='20' width='6' height='12' rx='1.5' fill='%23E91E8C'/%3E%3Crect x='13' y='13' width='6' height='19' rx='1.5' fill='%23E91E8C'/%3E%3Crect x='22' y='6' width='6' height='26' rx='1.5' fill='%23E91E8C'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -93,7 +93,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <script>
 var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market:'all',dateRange:'28d',
   customStart:'',customEnd:'',customPrevStart:'',customPrevEnd:'',reportMd:null,
-  kwSearch:'',kwActiveUrl:null};
+  kwSearch:'',kwActiveUrl:null,ga4Sort:'ke',ga4SortCol:'ke',compareMode:true};
 var MARKETS={
   all:   {label:'All markets',       prefix:null},
   gx:    {label:'\uD83C\uDF0D GX / Global',    prefix:null, gx:true},
@@ -248,7 +248,7 @@ function dateBadge(){var g=S.gsc,a=S.ga4,p=[];if(g)p.push(g.ds?drange(g.ds,g.de)
 function mkMC(label,val,sub,subCol,dt){return'<div class="mc"><div class="lb">'+esc(label)+'</div><div class="vl">'+esc(val)+'</div>'+(sub?'<div class="sb" style="color:'+(subCol||'#555')+'">'+esc(sub)+'</div>':'')+(dt?'<div class="dt">'+esc(dt)+'</div>':'')+'</div>';}
 function mkTbl(cols,rows,empty){if(!rows.length)return'<div class="empty">'+(empty||'No data')+'</div>';var h='<div class="tbl"><table><thead><tr>'+cols.map(function(c){return'<th'+(c.r?' class="r"':'')+'>'+c.l+'</th>';}).join('')+'</tr></thead><tbody>';rows.forEach(function(row){h+='<tr>'+row.map(function(cell,j){var v=cell&&cell.l!==undefined?cell.l:cell,st='';if(cell&&cell.c)st+='color:'+cell.c+';';if(cell&&cell.b)st+='font-weight:700;';if(cell&&cell.html)return'<td '+(cols[j]&&cols[j].r?'class="r"':'')+'>'+v+'</td>';var cls=cols[j]&&cols[j].r?'r':cols[j]&&cols[j].mono?'mono':'';return'<td'+(cls?' class="'+cls+'"':'')+' style="'+st+'" title="'+esc(v)+'">'+esc(v)+'</td>';}).join('')+'</tr>';});return h+'</tbody></table></div>';}
 function mkFbar(pfx,ph,types,sorts,extra){var h='<div class="fb"><input id="'+pfx+'q" placeholder="'+ph+'" style="flex:1;min-width:120px">';if(types)h+='<select id="'+pfx+'ty">'+types.map(function(t){return'<option value="'+t.v+'">'+t.l+'</option>';}).join('')+'</select>';if(sorts)h+='<select id="'+pfx+'so">'+sorts.map(function(s){return'<option value="'+s.v+'">'+s.l+'</option>';}).join('')+'</select>';if(extra)h+=extra;h+='<span id="'+pfx+'cnt" class="cnt"></span></div>';return h;}
-function bindFbar(pfx,fn){var qi=$(pfx+'q'),ti=$(pfx+'ty'),si=$(pfx+'so'),pi=$(pfx+'pt');if(qi)qi.oninput=function(){deb(fn);};if(ti)ti.onchange=fn;if(si)si.onchange=fn;if(pi)pi.onchange=fn;}
+function bindFbar(pfx,fn){var qi=$(pfx+'q'),ti=$(pfx+'ty'),si=$(pfx+'so'),pi=$(pfx+'pt');if(qi)qi.oninput=function(){deb(fn);};if(ti)ti.onchange=fn;if(si)si.onchange=function(){S.ga4SortCol=null;fn();};if(pi)pi.onchange=fn;}
 function fbarVals(pfx){return{q:($(pfx+'q')||{value:''}).value.toLowerCase(),ty:($(pfx+'ty')||{value:'all'}).value,so:($(pfx+'so')||{value:'views'}).value,pt:($(pfx+'pt')||{value:'all'}).value};}
 var PT_SEL='<select id="PFXPT"><option value="all">All page types</option><option value="state">States</option><option value="news">News</option><option value="bofu">BOFU</option><option value="casino">Casino brands</option><option value="social">Social</option><option value="other">Other</option></select>';
 function filterPT(pages,pt){if(pt==='all')return pages;return pages.filter(function(p){return getPageType(p.key||p.page)===pt;});}
@@ -278,7 +278,7 @@ function tabOverview(){
   var m=filteredGA4.filter(function(r){return r.pageType==='bofu'||r.pageType==='casino'||r.pageType==='state'||r.pageType==='Money Page';});
   var totV=0,totKE=0,totVP=0,totKEP=0;m.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
   var cd=parseFloat(pct(lc,pc)),id2=parseFloat(pct(li,pi)),vDiff=parseFloat(pct(totV,totVP)),kDiff=parseFloat(pct(totKE,totKEP));
-  var hasCmp=g&&g.hasComparison,hasCmpG=a&&a.hasComparison;
+  var hasCmp=g&&g.hasComparison&&S.compareMode,hasCmpG=a&&a.hasComparison&&S.compareMode;
   var gn=filteredPages.filter(function(p){return p.lp>0&&p.pp>0&&p.pp>p.lp;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,7);
   var dc2=filteredPages.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,7);
   var topKE=m.slice().sort(function(a,b){return b.keyEvents-a.keyEvents;}).slice(0,8);
@@ -309,7 +309,7 @@ function tabPositions(){
   posChart('cPF',chartPages,18);
 }
 function rPos(){
-  var g=S.gsc;if(!g)return;var v=fbarVals('p_'),hasCmp=g.hasComparison,mktKey2=S.market||'all';
+  var g=S.gsc;if(!g)return;var v=fbarVals('p_'),hasCmp=g.hasComparison&&S.compareMode,mktKey2=S.market||'all';
   var pages=g.pages.filter(function(p){if(!matchMarket(p.key,mktKey2))return false;if(v.q&&p.key.toLowerCase().indexOf(v.q)<0)return false;return true;});
   pages=filterPT(pages,v.pt);
   pages.sort(function(a,b){return v.so==='gain'?(b.pp-b.lp)-(a.pp-a.lp):v.so==='loss'?(a.pp-a.lp)-(b.pp-b.lp):v.so==='clicks'?b.lc-a.lc:v.so==='impr'?b.li-a.li:a.lp-b.lp;});
@@ -367,7 +367,7 @@ function getGA4FilteredRows(allRows, mktKey) {
 
 function tabGA4(){
   if(!S.ga4){$('tc').innerHTML='<div class="empty">Upload a GA4 CSV to see traffic data</div>';return;}
-  var a=S.ga4,hasCmp=a.hasComparison;
+  var a=S.ga4,hasCmp=a.hasComparison&&S.compareMode;
   var dr=a.ds?drange(a.ds,a.de):'';
   var prevStr=hasCmp&&a.dsPrev?drange(a.dsPrev,a.dePrev):'';
 
@@ -425,7 +425,7 @@ function tabGA4(){
     +'<div class="card"><div class="sec">Exit Click Goal (exit_click_goal) — top 10 pages</div><div style="height:185px"><canvas id="cG4"></canvas></div></div>'
     +mkFbar('g_','Filter by page URL...',
       [{v:'all',l:'All pages'},{v:'money',l:'Money pages only'}],
-      [{v:'views',l:'\u2193 Most views'},{v:'ke',l:'\u2193 Exit clicks'},{v:'conv',l:'\u2193 Highest conv.'},{v:'lowconv',l:'\u2191 Lowest conv.'},{v:'eng',l:'\u2193 Engaged'}],
+      [{v:'ke',l:'\u2193 Exit Click Goals'},{v:'views',l:'\u2193 Most views'},{v:'conv',l:'\u2193 Best conv. rate'},{v:'lowconv',l:'\u2191 Worst conv. rate'},{v:'eng',l:'\u2193 Most engaged'},{v:'vdrop',l:'\u2193 Biggest view drop'}],
       ptSel)
     +'<div id="gTbl"></div>';
 
@@ -434,8 +434,9 @@ function tabGA4(){
 }
 
 function rGA4(){
+window.rGA4=rGA4;
   var a=S.ga4;if(!a)return;
-  var v=fbarVals('g_'),hasCmp=a.hasComparison;
+  var v=fbarVals('g_'),hasCmp=a.hasComparison&&S.compareMode;
   var mktKey=S.market||'all';
 
   a.rows.forEach(function(r){
@@ -460,13 +461,14 @@ function rGA4(){
   // Apply page type badge filter
   if(v.pt!=='all') src=src.filter(function(r){return r.pageType===v.pt;});
 
-  // Sort
+  // Sort — column header clicks override dropdown
+  var so=S.ga4SortCol||v.so||'ke';
   src=src.slice().sort(function(a2,b2){
-    var so=v.so;
     if(so==='ke')return b2.keyEvents-a2.keyEvents;
     if(so==='conv'){var ca=a2.views>0?a2.keyEvents/a2.views:0,cb=b2.views>0?b2.keyEvents/b2.views:0;return cb-ca;}
     if(so==='lowconv'){var ca2=a2.views>0?a2.keyEvents/a2.views:1,cb2=b2.views>0?b2.keyEvents/b2.views:1;return ca2-cb2;}
     if(so==='eng')return b2.engTime-a2.engTime;
+    if(so==='vdrop'){var da=(a2.views||0)-(a2.viewsPrev||0),db=(b2.views||0)-(b2.viewsPrev||0);return da-db;}
     return b2.views-a2.views;
   });
 
@@ -501,15 +503,18 @@ function rGA4(){
 
   if(!src.length){gt.innerHTML='<div class="empty">No pages match filter</div>';return;}
 
+  var sortArrow=function(col){return so===col?' <span style="color:#E91E8C">\u25bc</span>':' <span style="color:#333">\u25bc</span>';};
+  var thClick=function(col,label){return'<th class="r" style="cursor:pointer;user-select:none" onclick="S.ga4SortCol=\''+col+'\';rGA4()" title="Sort by '+label+'">'+label+sortArrow(col)+'</th>';};
+
   var thead='<tr>'
     +'<th>Type</th>'
-    +'<th>Page URL — '+esc(MARKETS[mktKey]?MARKETS[mktKey].label:mktKey)+'</th>'
-    +'<th class="r">Views</th>'
+    +'<th>Page URL \u2014 '+esc(MARKETS[mktKey]?MARKETS[mktKey].label:mktKey)+'</th>'
+    +thClick('views','Views')
     +(hasCmp?'<th class="r">Views prev</th><th class="r">\u0394 Views</th>':'')
-    +'<th class="r" style="color:#E91E8C">Exit Click Goal</th>'
+    +thClick('ke','Exit Click Goal')
     +(hasCmp?'<th class="r">ECG prev</th><th class="r">\u0394 ECG</th>':'')
-    +'<th class="r">Conv.%</th>'
-    +'<th class="r">Eng. Time</th>'
+    +thClick('conv','Conv.%')
+    +thClick('eng','Eng. Time')
     +'</tr>';
 
   var tbodyRows=src.slice(0,150).map(function(r){
@@ -637,7 +642,7 @@ function tabKeywords(){
   }
 
   // Table
-  var hasCmp=g.hasComparison;
+  var hasCmp=g.hasComparison&&S.compareMode;
   html+='<div class="tbl"><table>';
   html+='<thead><tr>';
   html+='<th>URL'+(hasPageData?' <span style="color:#444;font-weight:400;text-transform:none;font-size:8px">(click to filter)</span>':'')+'</th>';
@@ -825,10 +830,11 @@ function renderUpload(){
   ROOT.innerHTML='<div class="up"><div style="text-align:center;margin-bottom:24px"><div class="ulogo"><svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg></div><div style="font-size:24px;font-weight:700;color:var(--t);margin-bottom:5px">SEO Dashboard</div><div style="font-size:13px;color:var(--tm)">casinos.com \u00b7 v2.3</div></div>'
     +'<div style="background:var(--bg2);border:1px solid #333;border-radius:11px;padding:16px 18px;margin-bottom:14px">'
     +'<div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px">\u26a1 Live data \u2014 no uploads needed</div>'
-    +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">'
     +'<span style="font-size:10px;color:#666">Date range:</span>'
-    +'<select id="dateRangeSel" style="height:24px;border:1px solid #444;border-radius:6px;background:var(--bg3);color:#ccc;font-size:10px;padding:0 6px;font-family:inherit">'+Object.keys(DATE_RANGES).map(function(k){return'<option value="'+k+'"'+(S.dateRange===k?' selected':'')+'>'+DATE_RANGES[k].label+'</option>';}).join('')+'</select>'
-    +'<span style="font-size:10px;color:#555" id="rangeHint">vs previous equal period</span>'
+    +'<select id="dateRangeSel" style="height:28px;border:1px solid #444;border-radius:6px;background:var(--bg3);color:#ccc;font-size:11px;padding:0 8px;font-family:inherit">'+Object.keys(DATE_RANGES).map(function(k){return'<option value="'+k+'"'+(S.dateRange===k?' selected':'')+'>'+DATE_RANGES[k].label+'</option>';}).join('')+'</select>'
+    +'<button id="cmpToggleUp" onclick="S.compareMode=!S.compareMode;renderUpload()" style="height:28px;padding:0 12px;border-radius:6px;border:1px solid '+(S.compareMode?'rgba(233,30,140,.5)':'#444')+';background:'+(S.compareMode?'rgba(233,30,140,.12)':'transparent')+';color:'+(S.compareMode?'#E91E8C':'#555')+';font-size:11px;cursor:pointer">'+(S.compareMode?'\u29cb Compare ON':'\u25a1 Compare OFF')+'</button>'
+    +'<span style="font-size:10px;color:#555" id="rangeHint">'+(S.compareMode?'vs previous equal period':'no comparison')+'</span>'
     +'</div>'
     +'<div id="customDates" style="display:'+(S.dateRange==='custom'?'flex':'none')+';flex-direction:column;gap:6px;background:var(--bg3);border:1px solid #333;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
     +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:10px;color:#888;width:90px">Current period</span><input type="date" id="cStart" value="'+(S.customStart||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#F0F0F0;font-size:10px;padding:0 6px;font-family:inherit"><span style="font-size:10px;color:#555">to</span><input type="date" id="cEnd" value="'+(S.customEnd||'')+'" style="height:24px;border:1px solid #444;border-radius:5px;background:var(--bg4);color:#F0F0F0;font-size:10px;padding:0 6px;font-family:inherit"></div>'
@@ -842,7 +848,7 @@ function renderUpload(){
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px"><div style="background:rgba(233,30,140,.05);border:1px solid rgba(233,30,140,.15);border-radius:8px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#E91E8C;margin-bottom:6px">GSC zip export</div><div style="font-size:10px;color:#666;line-height:1.6">Search Console \u2192 Performance \u2192 set dates \u2192 enable comparison \u2192 Export.</div></div><div style="background:rgba(39,174,96,.05);border:1px solid rgba(39,174,96,.15);border-radius:8px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#27AE60;margin-bottom:6px">GA4 CSV export</div><div style="font-size:10px;color:#666;line-height:1.6">GA4 \u2192 Reports \u2192 Pages &amp; screens \u2192 add comparison \u2192 Export CSV.</div></div></div></div>';
   var liveBtn=$('liveLoadBtn');if(liveBtn)liveBtn.onclick=function(){loadLiveData(S.market||'all');};
   var drSel=$('dateRangeSel');
-  if(drSel)drSel.onchange=function(){S.dateRange=drSel.value;var cd=$('customDates'),hint=$('rangeHint');if(cd)cd.style.display=S.dateRange==='custom'?'flex':'none';if(hint)hint.textContent=S.dateRange==='custom'?'specify periods below':'vs previous equal period';};
+  if(drSel)drSel.onchange=function(){S.dateRange=drSel.value;var cd=$('customDates'),hint=$('rangeHint');if(cd)cd.style.display=S.dateRange==='custom'?'flex':'none';if(hint)hint.textContent=S.dateRange==='custom'?'specify periods below':S.compareMode?'vs previous equal period':'no comparison';};
   function bindDateInput(id,field){var el=$(id);if(el)el.onchange=function(){S[field]=el.value;};}
   bindDateInput('cStart','customStart');bindDateInput('cEnd','customEnd');bindDateInput('cPrevStart','customPrevStart');bindDateInput('cPrevEnd','customPrevEnd');
   var dz=$('dz'),fu=$('fu'),ab=$('analyseBtn');
@@ -857,6 +863,7 @@ function render(){
   var TABS=[{id:'overview',l:'Overview'},{id:'positions',l:'Positions'},{id:'ga4',l:'GA4'},{id:'keywords',l:'Keywords'},{id:'takeaways',l:'AI Takeaways'}];
   var STAR2='<svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg>';
   ROOT.innerHTML='<div class="topbar"><div class="lm">'+STAR2+'</div><div><div class="ln">casinos.com</div><span class="ls">SEO Dashboard <span style="font-size:9px;color:#444;font-weight:400">v2.3</span></span></div>'+((S.gsc||S.ga4)?'<div class="dp"><span class="dd"></span>'+esc(dateBadge())+'</div>':'')+(S.gsc&&S.gsc.hasComparison?'<span class="cmp-pill">GSC cmp</span>':'')+(S.ga4&&S.ga4.hasComparison?'<span class="cmp-pill">GA4 cmp</span>':'')+'<div style="flex:1"></div>'
+    +(S.gsc||S.ga4?'<button id="cmpToggle" onclick="S.compareMode=!S.compareMode;render()" style="font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid '+(S.compareMode?'rgba(233,30,140,.5)':'#333')+';background:'+(S.compareMode?'rgba(233,30,140,.12)':'transparent')+';color:'+(S.compareMode?'#E91E8C':'#555')+';margin-right:2px" title="Toggle comparison period">'+(S.compareMode?'\u29cb Compare ON':'\u25a1 Compare OFF')+'</button>':'')
     +(S.gsc||S.ga4?'<button class="pdf-btn" id="pdfBtn" onclick="downloadPDF()"><svg viewBox="0 0 16 16" style="width:13px;height:13px;fill:currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zm-5 2h10v1.5H3V14z"/></svg>PDF</button>':'')
     +((S.gsc||S.ga4)?'<select style="height:26px;border:1px solid #333;border-radius:6px;background:var(--bg3);color:#888;font-size:10px;padding:0 6px;margin-right:6px;font-family:inherit" id="topDateSel">'+Object.keys(DATE_RANGES).map(function(k){return'<option value="'+k+'"'+(S.dateRange===k?' selected':'')+'>'+DATE_RANGES[k].label+'</option>';}).join('')+'</select>':'')
     +(S.dateRange==='custom'&&(S.gsc||S.ga4)?'<div style="display:flex;gap:4px;align-items:center;margin-right:6px;background:rgba(255,255,255,.04);border:1px solid #333;border-radius:8px;padding:3px 8px"><input type="date" id="tbCStart" value="'+(S.customStart||'')+'" style="height:22px;border:none;background:transparent;color:#F0F0F0;font-size:10px;padding:0;font-family:inherit;width:100px"><span style="font-size:9px;color:#444">vs</span><input type="date" id="tbCPrevStart" value="'+(S.customPrevStart||'')+'" style="height:22px;border:none;background:transparent;color:#666;font-size:10px;padding:0;font-family:inherit;width:100px"><button id="tbGoBtn" style="background:var(--pink);color:#fff;border:none;border-radius:5px;padding:2px 8px;font-size:9px;cursor:pointer;font-weight:700">Go</button></div>':'')
