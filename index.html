@@ -158,7 +158,7 @@ function fdate(s){if(!s||s.length!==8)return s||'';var mn=['Jan','Feb','Mar','Ap
 function drange(s,e){return s&&e?fdate(s)+' \u2013 '+fdate(e):fdate(s||e);}
 function deb(fn){clearTimeout(S.db);S.db=setTimeout(fn,220);}
 function kc(id){if(CH[id]){try{CH[id].destroy();}catch(e){}delete CH[id];}}
-var PT_STATES='alabama,alaska,arizona,arkansas,california,colorado,connecticut,delaware,florida,georgia,hawaii,idaho,illinois,indiana,iowa,kansas,kentucky,louisiana,maine,maryland,massachusetts,michigan,minnesota,mississippi,missouri,montana,nebraska,nevada,new-hampshire,new-jersey,new-mexico,new-york,north-carolina,north-dakota,ohio,oklahoma,oregon,pennsylvania,rhode-island,south-carolina,south-dakota,tennessee,texas,utah,vermont,virginia,washington,west-virginia,wisconsin,wyoming,ontario,quebec,british-columbia,alberta,manitoba,saskatchewan,nova-scotia'.split(',');
+var PT_STATES='alabama,alaska,arizona,arkansas,california,colorado,connecticut,delaware,florida,georgia,hawaii,idaho,illinois,indiana,iowa,kansas,kentucky,louisiana,maine,maryland,massachusetts,michigan,minnesota,mississippi,missouri,montana,nebraska,nevada,new-hampshire,new-jersey,new-mexico,new-york,north-carolina,north-dakota,ohio,oklahoma,oregon,pennsylvania,rhode-island,south-carolina,south-dakota,tennessee,texas,utah,vermont,virginia,washington,west-virginia,wisconsin,wyoming,ontario,quebec,british-columbia,alberta,manitoba,saskatchewan,nova-scotia,new-brunswick,prince-edward-island,newfoundland-and-labrador,newfoundland,northwest-territories,yukon,nunavut,england,scotland,wales,northern-ireland,london,manchester,birmingham,dublin,cork,galway,auckland,wellington,christchurch,victoria,new-south-wales,queensland,western-australia,south-australia,tasmania'.split(',');
 var PT_BRANDS='duckyluck,betmgm,betrivers,fanduel,draftkings,caesars,borgata,golden-nugget,hard-rock,pointsbet,barstool,bally,betway,unibet,888,partypoker,wsop,pokerstars,bet365,wynn,mgm,resorts,tropicana,virgin,raging-bull,brango,slotocash,bovada,cafe-casino,ignition,mcluck,stake,pulsz,high5,luckyland,funrize,modo,chumba,wow-vegas,sweepslots,realprize,bonus-blitz,croco,yabby,red-dog,planet-7,miami-club,silver-oak,slots-of-vegas,riverslots,betsson,ladbrokes,william-hill,paddypower,betfair,sky-bet,sportingbet,foxbet,betonline,mybookie,xbet,sportsbetting'.split(',');
 var PT_PAYMENTS='paypal,ach,google-pay,apple-pay,venmo,cash-app,visa,mastercard,american-express,amex,discover,skrill,neteller,paysafecard,prepaid,bitcoin,crypto,zelle,prizeout,gigadat'.split(',');
 var PT_BOFU='bonus,no-deposit,free-spins,deposit,cashback,no-wagering,minimum-deposit,apps,live-dealer,slots,blackjack,roulette,poker,baccarat,promo,promotion'.split(',');
@@ -170,7 +170,14 @@ function getPageType(url){
   for(var i=0;i<PT_PAYMENTS.length;i++){var segs=s.split('/');for(var j=0;j<segs.length;j++)if(segs[j]===PT_PAYMENTS[i])return'bofu';}
   for(var i=0;i<PT_BOFU.length;i++){var segs=s.split('/');for(var j=0;j<segs.length;j++)if(segs[j]===PT_BOFU[i]||segs[j].startsWith(PT_BOFU[i]+'-'))return'bofu';}
   var parts=s.split('/').filter(Boolean);
-  if(parts.length>=2&&(parts[0]==='us'||parts[0]==='ca')){for(var i=0;i<PT_STATES.length;i++)if(parts[1]===PT_STATES[i])return'state';}
+  // State pages: /us/texas, /ca/ontario, /uk/england, /ie/dublin, /au/victoria etc.
+  if(parts.length>=2){
+    var geo=parts[0];
+    var geos=['us','ca','uk','ie','au','nz','it','row'];
+    if(geos.indexOf(geo)>=0){
+      for(var i=0;i<PT_STATES.length;i++)if(parts[1]===PT_STATES[i])return'state';
+    }
+  }
   return'other';
 }
 var PTC={state:{label:'State',color:'#5DADE2',bg:'rgba(93,173,226,.15)'},news:{label:'News',color:'#F39C12',bg:'rgba(243,156,18,.15)'},bofu:{label:'BOFU',color:'#27AE60',bg:'rgba(39,174,96,.15)'},casino:{label:'Casino',color:'#E91E8C',bg:'rgba(233,30,140,.15)'},social:{label:'Social',color:'#9B59B6',bg:'rgba(155,89,182,.15)'},other:{label:'Other',color:'#888',bg:'rgba(136,136,136,.12)'}};
@@ -847,7 +854,7 @@ function tabDecay(){
 
   // Filter controls
   html+='<div class="fb" style="margin-bottom:12px">';
-  html+='<input id="decaySearch" type="text" placeholder="Filter by page URL\u2026" style="flex:1;min-width:150px;height:30px;font-size:11px" oninput="S.decaySearch=this.value;tabDecay()" value="'+esc(S.decaySearch||'')+'">';
+  html+='<input id="decaySearch" type="text" placeholder="Filter by page URL\u2026" style="flex:1;min-width:150px;height:30px;font-size:11px" oninput="S.decaySearch=this.value;deb(function(){tabDecay();setTimeout(function(){var el=$(\'decaySearch\');if(el){el.focus();var v=el.value.length;el.setSelectionRange(v,v);}},0);})" value="'+esc(S.decaySearch||'')+'">';
   html+='<select onchange="S.decayPageType=this.value;tabDecay()" style="height:30px;font-size:11px;border:1px solid #444;border-radius:6px;background:var(--bg3);color:#ccc;padding:0 8px">';
   [{v:'all',l:'All page types'},{v:'bofu',l:'BOFU'},{v:'state',l:'State'},{v:'casino',l:'Casino'},{v:'news',l:'News'},{v:'other',l:'Other'}].forEach(function(o){
     html+='<option value="'+o.v+'"'+(ptFilter===o.v?' selected':'')+'>'+o.l+'</option>';
@@ -1662,7 +1669,7 @@ function render(){
   if(tbGo)tbGo.onclick=function(){loadLiveData(S.market||'all');};
   var ms=$('mktSelect');
   if(ms)ms.onchange=function(){
-    var newMkt=ms.value;S.market=newMkt;S.ta=null;S.reportMd=null;S.kwActiveUrl=null;S.ga4SortCol='ke';
+    var newMkt=ms.value;S.market=newMkt;S.ta=null;S.reportMd=null;S.kwActiveUrl=null;S.ga4SortCol='ke';S.decayReport=null;S.decaySearch='';
     var isLive=S.files.length>0&&S.files[0].type==='LIVE';
     if(isLive&&N8N_WEBHOOK_URL&&N8N_WEBHOOK_URL!=='YOUR_N8N_WEBHOOK_URL_HERE'){
       var dates2=getDates(S.dateRange||'28d');
