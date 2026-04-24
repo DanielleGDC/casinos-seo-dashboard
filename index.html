@@ -94,6 +94,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market:'all',dateRange:'28d',
   customStart:'',customEnd:'',customPrevStart:'',customPrevEnd:'',reportMd:null,
   kwSearch:'',kwActiveUrl:null,ga4Sort:'ke',ga4SortCol:'ke',compareMode:true,
+  decayReport:null,decayMinClicks:20,decayMinPct:15,decayPageType:'all',
   cwvData:{},cwvRunning:false,cwvStrategy:'mobile',cwvLastRaw:null,cwvReport:null,cwvPageType:'money',cwvFilter:'all',
   cwvApiKey:(function(){try{return localStorage.getItem('cwv_api_key')||'';}catch(e){return'';}}())};
 var MARKETS={
@@ -745,6 +746,263 @@ function _bindKwEvents(){
   });
 }
 /* ============================================================
+   CONTENT DECAY TAB
+   ============================================================ */
+function tabDecay(){
+  var g=S.gsc,a=S.ga4;
+  if(!g||!g.hasComparison){
+    $('tc').innerHTML='<div class="empty" style="padding:60px 20px">'
+      +'<div style="font-size:32px;margin-bottom:10px">\uD83D\uDCC9</div>'
+      +'<div style="font-size:13px;color:#888;margin-bottom:6px">Comparison data required</div>'
+      +'<div style="font-size:11px;color:#555">Content Decay needs GSC data with a comparison period.<br>Make sure Compare is ON and load live data.</div>'
+      +'</div>';
+    return;
+  }
+
+  var mktKey=S.market||'all';
+  var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
+  var minClicks=S.decayMinClicks||20;
+  var minPct=S.decayMinPct||15;
+  var ptFilter=S.decayPageType||'all';
+
+  // Build decay dataset from GSC pages
+  var allPages=g.pages.filter(function(p){
+    if(!matchMarket(p.key,mktKey))return false;
+    if(ptFilter!=='all'&&getPageType(p.key)!==ptFilter)return false;
+    return p.pc>=minClicks && p.lc<p.pc; // had traffic before, lost clicks
+  }).map(function(p){
+    var clickDrop=p.pc-p.lc;
+    var clickDropPct=p.pc>0?((p.pc-p.lc)/p.pc*100):0;
+    var imprDrop=p.pi-p.li;
+    var imprDropPct=p.pi>0?((p.pi-p.li)/p.pi*100):0;
+    var posDrop=p.lp>0&&p.pp>0?p.lp-p.pp:0; // positive = dropped in rankings
+
+    // Classify decay cause
+    var cause='unknown';
+    if(posDrop>3&&imprDropPct>10)      cause='ranking_loss';
+    else if(posDrop>2)                  cause='ranking_drop';
+    else if(imprDropPct>15)             cause='visibility_loss';
+    else if(clickDropPct>20&&posDrop<1) cause='ctr_drop';
+    else                                cause='traffic_loss';
+
+    // Severity
+    var severity=clickDropPct>=50?'critical':clickDropPct>=25?'high':clickDropPct>=minPct?'medium':'low';
+
+    // GA4 data if available
+    var ga4Row=a?a.rows.find(function(r){
+      var rp=r.page.replace(/^https?:\/\/[^/]+/,'').replace(/\/$/,'');
+      var pp=p.key.replace(/^https?:\/\/[^/]+/,'').replace(/\/$/,'');
+      return rp===pp;
+    }):null;
+
+    return{
+      key:p.key,
+      pt:getPageType(p.key),
+      lc:p.lc,pc:p.pc,
+      li:p.li,pi:p.pi,
+      lp:p.lp,pp:p.pp,
+      clickDrop:clickDrop,
+      clickDropPct:clickDropPct,
+      imprDrop:imprDrop,
+      imprDropPct:imprDropPct,
+      posDrop:posDrop,
+      cause:cause,
+      severity:severity,
+      views:ga4Row?ga4Row.views:null,
+      viewsPrev:ga4Row?ga4Row.viewsPrev:null,
+      keyEvents:ga4Row?ga4Row.keyEvents:null
+    };
+  }).filter(function(p){return p.clickDropPct>=minPct;})
+    .sort(function(a,b){return b.clickDrop-a.clickDrop;});
+
+  var critical=allPages.filter(function(p){return p.severity==='critical';});
+  var high=allPages.filter(function(p){return p.severity==='high';});
+  var totalLostClicks=allPages.reduce(function(s,p){return s+p.clickDrop;},0);
+  var dr=g.ds?drange(g.ds,g.de):g.dateRange;
+
+  var CAUSES={
+    ranking_loss: {label:'Ranking loss',     color:'#E05C3A', icon:'\u2193\uFE0F',  tip:'Position dropped significantly — content may need refreshing or backlinks'},
+    ranking_drop: {label:'Position drop',    color:'#D4882A', icon:'\uD83D\uDCC9',  tip:'Moderate position decline — monitor and consider content update'},
+    visibility_loss:{label:'Visibility loss',color:'#9B59B6', icon:'\uD83D\uDC41',  tip:'Impressions dropped — may have been deindexed or suppressed'},
+    ctr_drop:     {label:'CTR decline',      color:'#5DADE2', icon:'\uD83D\uDCCA',  tip:'Position held but fewer clicks — title/meta may need optimising'},
+    traffic_loss: {label:'Traffic loss',     color:'#888',    icon:'\uD83D\uDCCA',  tip:'General traffic decline across clicks and impressions'},
+    unknown:      {label:'Decline',          color:'#555',    icon:'\u2193',         tip:'Traffic declining'}
+  };
+  var SEV={
+    critical:{label:'Critical',color:'#E05C3A',bg:'rgba(224,92,58,.12)'},
+    high:    {label:'High',    color:'#D4882A',bg:'rgba(212,136,42,.1)'},
+    medium:  {label:'Medium',  color:'#888',   bg:'rgba(136,136,136,.08)'},
+    low:     {label:'Low',     color:'#555',   bg:'rgba(85,85,85,.06)'}
+  };
+
+  var html='';
+
+  // Summary cards
+  html+='<div class="g4" style="margin-bottom:14px">'
+    +mkMC('\uD83D\uDCC9 Decaying Pages',String(allPages.length),'Lost \u2265'+minPct+'% clicks vs prev','#E05C3A',dr)
+    +mkMC('Critical (>50% drop)',String(critical.length),critical.length>0?'Immediate attention needed':'All clear',critical.length>0?'#E05C3A':'#27AE60')
+    +mkMC('High (25-50% drop)',String(high.length),high.length>0?'Action recommended':'','#D4882A')
+    +mkMC('Est. Lost Clicks',fmt(totalLostClicks),'vs previous period','#E05C3A')
+    +'</div>';
+
+  // Filter controls
+  html+='<div class="fb" style="margin-bottom:12px">';
+  html+='<input id="decaySearch" type="text" placeholder="Filter by page URL\u2026" style="flex:1;min-width:150px;height:30px;font-size:11px" oninput="S.decaySearch=this.value;tabDecay()" value="'+esc(S.decaySearch||'')+'">';
+  html+='<select onchange="S.decayPageType=this.value;tabDecay()" style="height:30px;font-size:11px;border:1px solid #444;border-radius:6px;background:var(--bg3);color:#ccc;padding:0 8px">';
+  [{v:'all',l:'All page types'},{v:'bofu',l:'BOFU'},{v:'state',l:'State'},{v:'casino',l:'Casino'},{v:'news',l:'News'},{v:'other',l:'Other'}].forEach(function(o){
+    html+='<option value="'+o.v+'"'+(ptFilter===o.v?' selected':'')+'>'+o.l+'</option>';
+  });
+  html+='</select>';
+  html+='<select onchange="S.decayMinPct=+this.value;tabDecay()" style="height:30px;font-size:11px;border:1px solid #444;border-radius:6px;background:var(--bg3);color:#ccc;padding:0 8px">';
+  [{v:10,l:'>10% drop'},{v:15,l:'>15% drop'},{v:25,l:'>25% drop'},{v:50,l:'>50% drop (critical)'}].forEach(function(o){
+    html+='<option value="'+o.v+'"'+(minPct===o.v?' selected':'')+'>'+o.l+'</option>';
+  });
+  html+='</select>';
+  html+='<select onchange="S.decayMinClicks=+this.value;tabDecay()" style="height:30px;font-size:11px;border:1px solid #444;border-radius:6px;background:var(--bg3);color:#ccc;padding:0 8px">';
+  [{v:10,l:'Min 10 prev clicks'},{v:20,l:'Min 20 prev clicks'},{v:50,l:'Min 50 prev clicks'},{v:100,l:'Min 100 prev clicks'}].forEach(function(o){
+    html+='<option value="'+o.v+'"'+(minClicks===o.v?' selected':'')+'>'+o.l+'</option>';
+  });
+  html+='</select>';
+  html+='<span class="cnt">'+allPages.length+' pages</span>';
+  html+='</div>';
+
+  if(!allPages.length){
+    html+='<div class="empty">\u2705 No significant content decay detected for '+esc(mktLabel)+' with current filters</div>';
+  } else {
+    // Apply search filter
+    var display=allPages;
+    if(S.decaySearch){var sq=S.decaySearch.toLowerCase();display=display.filter(function(p){return p.key.toLowerCase().indexOf(sq)>=0;});}
+
+    html+='<div class="tbl"><table><thead><tr>'
+      +'<th>Severity</th>'
+      +'<th>Type</th>'
+      +'<th>Page</th>'
+      +'<th>Cause</th>'
+      +'<th class="r">Prev clicks</th>'
+      +'<th class="r">Curr clicks</th>'
+      +'<th class="r">Lost clicks</th>'
+      +'<th class="r">Drop %</th>'
+      +'<th class="r">Pos. change</th>'
+      +'<th class="r">Impr. drop</th>'
+      +(a?'<th class="r">GA4 views</th>':'')
+      +'</tr></thead><tbody>';
+
+    display.slice(0,100).forEach(function(p){
+      var sev=SEV[p.severity]||SEV.medium;
+      var cause=CAUSES[p.cause]||CAUSES.unknown;
+      var pageDisplay=p.key.replace(/^https?:\/\/[^/]+/,'');
+      var posChange=p.pp>0&&p.lp>0?p.lp-p.pp:null;
+
+      html+='<tr style="background:'+sev.bg+'">'
+        +'<td><span style="font-size:9px;font-weight:700;color:'+sev.color+';background:'+sev.bg+';border:1px solid '+sev.color+';border-radius:4px;padding:1px 6px">'+sev.label+'</span></td>'
+        +'<td>'+ptBadge(p.pt)+'</td>'
+        +'<td class="url-cell" style="font-family:monospace;font-size:10px;color:#aaa" title="'+esc(p.key)+'">'+esc(pageDisplay.length>50?pageDisplay.slice(0,48)+'\u2026':pageDisplay)+'</td>'
+        +'<td><span title="'+esc(cause.tip)+'" style="font-size:10px;color:'+cause.color+';cursor:help">'+cause.icon+' '+cause.label+'</span></td>'
+        +'<td class="r" style="color:#888">'+fmt(p.pc)+'</td>'
+        +'<td class="r" style="color:#F0F0F0">'+fmt(p.lc)+'</td>'
+        +'<td class="r" style="color:#E05C3A;font-weight:700">-'+fmt(p.clickDrop)+'</td>'
+        +'<td class="r" style="color:'+sev.color+';font-weight:700">-'+p.clickDropPct.toFixed(0)+'%</td>'
+        +'<td class="r" style="color:'+(posChange!=null&&posChange>0?'#E05C3A':posChange!=null&&posChange<0?'#27AE60':'#555')+';">'+(posChange!=null?(posChange>0?'+':'')+posChange.toFixed(1):'\u2014')+'</td>'
+        +'<td class="r" style="color:#888">'+(p.imprDropPct>0?'-'+p.imprDropPct.toFixed(0)+'%':'\u2014')+'</td>'
+        +(a?'<td class="r" style="color:#888">'+(p.views!=null?fmt(p.views)+' <span style="color:#555;font-size:9px">('+fmt(p.viewsPrev||0)+')</span>':'\u2014')+'</td>':'')
+        +'</tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+
+  // AI Analysis button
+  if(allPages.length){
+    html+='<div style="background:var(--bg2);border:1px solid #222;border-radius:11px;padding:14px 16px;margin-top:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">';
+    html+='<div style="font-size:11px;color:#888">Get prioritised recovery recommendations from Claude</div>';
+    html+='<button class="bp" id="decayReportBtn" onclick="runDecayReport()" style="font-size:12px;padding:8px 18px">\uD83E\uDD16 Generate decay recovery plan</button>';
+    html+='</div>';
+  }
+
+  if(S.decayReport){
+    html+=_renderDecayReport(S.decayReport);
+  }
+
+  $('tc').innerHTML=html;
+}
+
+window.runDecayReport=function(){
+  var btn=$('decayReportBtn');
+  if(btn){btn.disabled=true;btn.textContent='Analysing\u2026';}
+
+  var g=S.gsc,a=S.ga4,mktKey=S.market||'all';
+  var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
+  var minClicks=S.decayMinClicks||20;
+  var minPct=S.decayMinPct||15;
+
+  var pages=g.pages.filter(function(p){
+    if(!matchMarket(p.key,mktKey))return false;
+    return p.pc>=minClicks&&p.lc<p.pc&&((p.pc-p.lc)/p.pc*100)>=minPct;
+  }).map(function(p){
+    var pct=p.pc>0?(p.pc-p.lc)/p.pc*100:0;
+    var posDrop=p.lp>0&&p.pp>0?p.lp-p.pp:0;
+    return{key:p.key.replace(/^https?:\/\/[^/]+/,''),type:getPageType(p.key),
+      clickDrop:p.pc-p.lc,pct:pct.toFixed(0),
+      prev:p.pc,curr:p.lc,posDrop:posDrop.toFixed(1),
+      imprPct:p.pi>0?((p.pi-p.li)/p.pi*100).toFixed(0):0};
+  }).sort(function(a,b){return(b.pct-a.pct)+(b.clickDrop-a.clickDrop);}).slice(0,20);
+
+  var critical=pages.filter(function(p){return p.pct>=50;});
+  var high=pages.filter(function(p){return p.pct>=25&&p.pct<50;});
+
+  var prompt='You are a senior SEO analyst for casinos.com. Analyse this content decay data and provide a prioritised recovery plan.\n\n'
+    +'MARKET: '+mktLabel+'\nPERIOD: '+(g.ds?drange(g.ds,g.de):g.dateRange)+' vs previous\n\n'
+    +'CRITICAL DECAY (>50% click drop):\n'
+    +critical.map(function(p){return p.key+' | type:'+p.type+' | clicks:'+p.prev+'\u2192'+p.curr+' (-'+p.pct+'%) | pos change:'+p.posDrop+' | impr drop:'+p.imprPct+'%';}).join('\n')
+    +'\n\nHIGH DECAY (25-50% drop):\n'
+    +high.map(function(p){return p.key+' | type:'+p.type+' | clicks:'+p.prev+'\u2192'+p.curr+' (-'+p.pct+'%) | pos change:'+p.posDrop;}).join('\n')
+    +'\n\nOTHER DECAYING PAGES:\n'
+    +pages.filter(function(p){return p.pct<25;}).map(function(p){return p.key+' -'+p.pct+'%';}).join(', ')
+    +'\n\nFor each section, identify whether decay is caused by: ranking drops, CTR issues, content freshness, or algorithm updates.'
+    +'\n\nReply with EXACTLY these sections:\n'
+    +'## Decay Summary\n'
+    +'## Critical Pages — Immediate Action\n- [page: root cause + specific fix]\n'
+    +'## Pattern Analysis\n- [common themes across decaying pages]\n'
+    +'## Recovery Priority Order\n1. [page or group: action]\n2.\n3.\n4.\n5.\n'
+    +'## What To Monitor';
+
+  fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    S.decayReport=d.content&&d.content.length>0?d.content.map(function(c){return c.text||'';}).join(''):(d.error?'Error: '+JSON.stringify(d.error):'No response');
+    if(btn){btn.disabled=false;btn.textContent='\uD83E\uDD16 Generate decay recovery plan';}
+    tabDecay();
+  })
+  .catch(function(e){
+    S.decayReport='Error: '+e.message;
+    if(btn){btn.disabled=false;btn.textContent='\uD83E\uDD16 Generate decay recovery plan';}
+    tabDecay();
+  });
+};
+
+function _renderDecayReport(text){
+  var ST={
+    'Decay Summary':           {bg:'rgba(224,92,58,.07)',  bc:'#E05C3A',tc:'#E8896A'},
+    'Critical Pages \u2014 Immediate Action':{bg:'rgba(224,92,58,.1)',bc:'#E05C3A',tc:'#F0A090'},
+    'Pattern Analysis':        {bg:'rgba(212,136,42,.07)', bc:'#D4882A',tc:'#F0A93C'},
+    'Recovery Priority Order': {bg:'rgba(233,30,140,.07)', bc:'#E91E8C',tc:'#F48FB1'},
+    'What To Monitor':         {bg:'rgba(255,255,255,.03)', bc:'#555',  tc:'#aaa'}
+  };
+  var secs=text.split(/^## /m).filter(Boolean);
+  var html='<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +'<div style="font-size:10px;color:#555">Content Decay Recovery Plan \u2014 powered by Claude</div>'
+    +'<button onclick="S.decayReport=null;tabDecay()" style="font-size:11px;padding:4px 10px">Clear</button>'
+    +'</div>';
+  secs.forEach(function(sec){
+    var parts=sec.split('\n'),title=parts[0].trim(),body=parts.slice(1).join('\n').trim();
+    var st=ST[title]||{bg:'rgba(255,255,255,.03)',bc:'#333',tc:'#888'};
+    html+='<div class="tab-box" style="background:'+st.bg+';border-left-color:'+st.bc+';margin-bottom:8px">'
+      +'<div class="tab-h" style="color:'+st.bc+'">'+esc(title)+'</div>'
+      +'<div class="tab-b" style="color:'+st.tc+'">'+esc(body)+'</div></div>';
+  });
+  return html+'</div>';
+}
+
+/* ============================================================
    CORE WEB VITALS TAB
    ============================================================ */
 var CWV_THRESHOLDS={
@@ -844,10 +1102,23 @@ function tabCWV(){
   // API Key + Custom URL row
   var savedKey=S.cwvApiKey||'';
   html+='<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
-  html+='<span style="font-size:10px;color:#555;white-space:nowrap">API Key:</span>';
-  html+='<input id="cwvApiKeyInput" type="password" placeholder="Paste free Google PageSpeed API key" value="'+esc(savedKey)+'" style="flex:1;min-width:160px;height:26px;font-size:10px;border:1px solid '+(savedKey?'rgba(39,174,96,.4)':'#333')+'">';
-  html+='<button onclick="S.cwvApiKey=$(\'cwvApiKeyInput\').value;try{localStorage.setItem(\'cwv_api_key\',S.cwvApiKey);}catch(e){}tabCWV()" style="height:26px;padding:0 10px;font-size:10px;border-radius:6px;border:1px solid #444;color:#aaa;background:var(--bg3);cursor:pointer;white-space:nowrap">\u2713 Save</button>';
-  html+='<input id="cwvCustomUrl" type="text" placeholder="Or check any URL e.g. /us/bonus/..." style="flex:1;min-width:160px;height:26px;font-size:10px">';
+  if(savedKey){
+    // Locked state — key is set, show masked value with lock icon
+    html+='<div style="display:flex;align-items:center;gap:6px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.25);border-radius:7px;padding:4px 10px">';
+    html+='<span style="font-size:12px">\uD83D\uDD12</span>';
+    html+='<span style="font-size:10px;color:#27AE60;font-weight:700">API Key saved</span>';
+    html+='<span style="font-size:10px;color:#555;font-family:monospace">'+savedKey.slice(0,8)+'\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'+savedKey.slice(-4)+'</span>';
+    html+='<button onclick="if(confirm(\'Remove saved API key?\''
+      +'){S.cwvApiKey=\'\';try{localStorage.removeItem(\'cwv_api_key\');}catch(e){}tabCWV();}" '
+      +'style="background:transparent;border:none;color:#555;font-size:10px;cursor:pointer;padding:0 4px" title="Remove key">\u2715</button>';
+    html+='</div>';
+  } else {
+    // Unlocked state — show input to add key
+    html+='<span style="font-size:10px;color:#555;white-space:nowrap">API Key:</span>';
+    html+='<input id="cwvApiKeyInput" type="password" placeholder="Paste free Google PageSpeed API key (console.cloud.google.com)" style="flex:1;min-width:200px;height:26px;font-size:10px;border:1px solid #333">';
+    html+='<button onclick="var k=$(\'cwvApiKeyInput\').value.trim();if(k){S.cwvApiKey=k;try{localStorage.setItem(\'cwv_api_key\',k);}catch(e){}tabCWV();}" style="height:26px;padding:0 10px;font-size:10px;border-radius:6px;border:1px solid rgba(39,174,96,.4);color:#27AE60;background:rgba(39,174,96,.08);cursor:pointer;white-space:nowrap">\uD83D\uDD13 Save key</button>';
+  }
+  html+='<input id="cwvCustomUrl" type="text" placeholder="Check any URL e.g. /us/bonus/..." style="flex:1;min-width:160px;height:26px;font-size:10px">';
   html+='<button onclick="runCWVSingle()" style="height:26px;padding:0 12px;font-size:10px;border-radius:6px;border:1px solid #444;color:#aaa;background:var(--bg3);cursor:pointer;white-space:nowrap">Check URL</button>';
   html+='</div>';
 
@@ -1366,7 +1637,7 @@ function renderUpload(){
 /* MAIN RENDER */
 function render(){
   if(!S.gsc&&!S.ga4){renderUpload();return;}
-  var TABS=[{id:'overview',l:'Overview'},{id:'positions',l:'Positions'},{id:'ga4',l:'GA4'},{id:'keywords',l:'Keywords'},{id:'cwv',l:'\u26a1 Core Web Vitals'},{id:'takeaways',l:'AI Takeaways'}];
+  var TABS=[{id:'overview',l:'Overview'},{id:'positions',l:'Positions'},{id:'ga4',l:'GA4'},{id:'keywords',l:'Keywords'},{id:'decay',l:'\uD83D\uDCC9 Content Decay'},{id:'cwv',l:'\u26a1 Core Web Vitals'},{id:'takeaways',l:'AI Takeaways'}];
   var STAR2='<svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg>';
   ROOT.innerHTML='<div class="topbar"><div class="lm">'+STAR2+'</div><div><div class="ln">casinos.com</div><span class="ls">SEO Dashboard <span style="font-size:9px;color:#444;font-weight:400">v2.3</span></span></div>'+((S.gsc||S.ga4)?'<div class="dp"><span class="dd"></span>'+esc(dateBadge())+'</div>':'')+(S.gsc&&S.gsc.hasComparison?'<span class="cmp-pill">GSC cmp</span>':'')+(S.ga4&&S.ga4.hasComparison?'<span class="cmp-pill">GA4 cmp</span>':'')+'<div style="flex:1"></div>'
     +(S.gsc||S.ga4?'<button id="cmpToggle" onclick="S.compareMode=!S.compareMode;render()" style="font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid '+(S.compareMode?'rgba(233,30,140,.5)':'#333')+';background:'+(S.compareMode?'rgba(233,30,140,.12)':'transparent')+';color:'+(S.compareMode?'#E91E8C':'#555')+';margin-right:2px" title="Toggle comparison period">'+(S.compareMode?'\u29cb Compare ON':'\u25a1 Compare OFF')+'</button>':'')
@@ -1401,7 +1672,7 @@ function render(){
   };
   doTab();
 }
-function doTab(){if(S.tab==='overview')tabOverview();else if(S.tab==='positions')tabPositions();else if(S.tab==='ga4')tabGA4();else if(S.tab==='keywords')tabKeywords();else if(S.tab==='cwv')tabCWV();else if(S.tab==='takeaways')tabTakeaways();}
+function doTab(){if(S.tab==='overview')tabOverview();else if(S.tab==='positions')tabPositions();else if(S.tab==='ga4')tabGA4();else if(S.tab==='keywords')tabKeywords();else if(S.tab==='decay')tabDecay();else if(S.tab==='cwv')tabCWV();else if(S.tab==='takeaways')tabTakeaways();}
 /* PDF EXPORT */
 async function downloadPDF(){
   var btn=$('pdfBtn');if(btn){btn.textContent='Building PDF...';btn.disabled=true;}
