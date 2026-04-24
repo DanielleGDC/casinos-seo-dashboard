@@ -863,6 +863,70 @@ function tabDecay(){
     +mkMC('Est. Lost Clicks',fmt(totalLostClicks),'vs previous period','#E05C3A')
     +'</div>';
 
+  // How it works — legend
+  html+='<details style="margin-bottom:14px">'
+    +'<summary style="font-size:11px;color:#555;cursor:pointer;padding:10px 14px;background:var(--bg2);border:1px solid #222;border-radius:8px;list-style:none;display:flex;align-items:center;gap:6px">'
+    +'<span style="color:#444">\u25b6</span> <strong style="color:#888">How decay is detected &amp; classified</strong> <span style="color:#444;margin-left:auto;font-size:10px">click to expand</span>'
+    +'</summary>'
+    +'<div style="background:var(--bg2);border:1px solid #222;border-top:none;border-radius:0 0 8px 8px;padding:14px 16px">'
+
+    // Detection formula
+    +'<div style="margin-bottom:14px">'
+    +'<div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Detection formula</div>'
+    +'<div style="font-size:11px;color:#666;line-height:1.8">'
+    +'A page is flagged as decaying when it had <strong style="color:#aaa">at least '+minClicks+' clicks</strong> in the previous period '
+    +'and lost <strong style="color:#aaa">'+minPct+'% or more</strong> of those clicks in the current period. '
+    +'Both thresholds are adjustable using the filters above.'
+    +'</div>'
+    +'</div>'
+
+    // Severity
+    +'<div style="margin-bottom:14px">'
+    +'<div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Severity levels</div>'
+    +'<div style="display:flex;flex-direction:column;gap:6px">'
+    +[
+      {sev:'Critical', color:'#E05C3A', formula:'>50% click drop', desc:'More than half of previous clicks lost. Needs urgent investigation.'},
+      {sev:'High',     color:'#D4882A', formula:'25–50% click drop', desc:'Significant decline. Should be actioned within the week.'},
+      {sev:'Medium',   color:'#888',    formula:'15–24% click drop', desc:'Noticeable decline. Worth monitoring and scheduling a review.'},
+      {sev:'Low',      color:'#555',    formula:'Below medium threshold', desc:'Minor decline within normal variance range.'}
+    ].map(function(s){
+      return'<div style="display:flex;align-items:flex-start;gap:10px">'
+        +'<span style="font-size:9px;font-weight:700;color:'+s.color+';border:1px solid '+s.color+';border-radius:4px;padding:1px 7px;white-space:nowrap;margin-top:1px">'+s.sev+'</span>'
+        +'<div><span style="font-size:11px;color:#aaa;font-weight:600">'+s.formula+'</span>'
+        +'<span style="font-size:11px;color:#555"> — '+s.desc+'</span></div>'
+        +'</div>';
+    }).join('')
+    +'</div></div>'
+
+    // Cause classification
+    +'<div>'
+    +'<div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Cause classification</div>'
+    +'<div style="font-size:10px;color:#555;margin-bottom:8px">Each decaying page is automatically diagnosed based on the combination of click change, impression change, and position change vs the previous period.</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +[
+      {key:'ranking_loss', label:'Ranking loss',    color:'#E05C3A', formula:'Position dropped >3 places AND impressions fell >10%',    action:'Content may be outdated, lost backlinks, or hit by an algorithm update. Refresh content and audit links.'},
+      {key:'ranking_drop', label:'Position drop',   color:'#D4882A', formula:'Position dropped 2–3 places',                              action:'Moderate ranking slide. Update content, improve internal linking, check for technical issues.'},
+      {key:'visibility_loss',label:'Visibility loss',color:'#9B59B6',formula:'Impressions dropped >15% but position change is small',    action:'Page may have been deindexed, penalised, or suppressed in SERPs. Check GSC Coverage and any manual actions.'},
+      {key:'ctr_drop',    label:'CTR decline',      color:'#5DADE2', formula:'Position held (change <1) but CTR dropped >20%',          action:'Rankings are fine but fewer people click. Rewrite the title tag and meta description to be more compelling.'},
+      {key:'traffic_loss',label:'Traffic loss',     color:'#888',    formula:'General decline not matching above patterns',              action:'Broad traffic drop. Compare against site-wide trends to rule out seasonal patterns or algorithm shifts.'}
+    ].map(function(cause){
+      return'<div style="background:rgba(255,255,255,.02);border:1px solid #222;border-radius:7px;padding:10px 12px">'
+        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'
+        +'<span style="font-size:11px;color:'+cause.color+';font-weight:700">'+cause.label+'</span>'
+        +'</div>'
+        +'<div style="font-size:10px;color:#555;margin-bottom:4px">'
+        +'<strong style="color:#666">Triggered when: </strong>'+esc(cause.formula)
+        +'</div>'
+        +'<div style="font-size:10px;color:#555">'
+        +'<strong style="color:#666">What to do: </strong>'+esc(cause.action)
+        +'</div>'
+        +'</div>';
+    }).join('')
+    +'</div>'
+    +'</div>'
+    +'</div>'
+    +'</details>';
+
   // Filter controls
   html+='<div class="fb" style="margin-bottom:12px">';
   html+='<input id="decaySearch" type="text" placeholder="Filter by page URL\u2026" style="flex:1;min-width:150px;height:30px;font-size:11px" oninput="S.decaySearch=this.value;deb(function(){tabDecay();setTimeout(function(){var el=$(\'decaySearch\');if(el){el.focus();var v=el.value.length;el.setSelectionRange(v,v);}},0);})" value="'+esc(S.decaySearch||'')+'">';
@@ -1505,7 +1569,8 @@ function _fetchCWV(url,cb){
 
   fetch(apiUrl)
   .then(function(r){
-    if(!r.ok)throw new Error('HTTP '+r.status+' '+r.statusText);
+    S.cwvData[url]={error:'Not accessible — likely bot/crawler protection on this page'};
+    cb();return;
     return r.json();
   })
   .then(function(d){
@@ -1573,7 +1638,13 @@ function _fetchCWV(url,cb){
     cb();
   })
   .catch(function(e){
-    S.cwvData[url]={error:'Fetch failed: '+e.message};
+    var msg=e.message||'';
+    var friendly=msg.includes('500')?'Not accessible — likely bot/crawler protection':
+                 msg.includes('404')?'Page not found (404)':
+                 msg.includes('403')?'Access blocked (403)':
+                 msg.includes('Failed to fetch')||msg.includes('NetworkError')?'Network error — check your connection':
+                 'Request failed: '+msg;
+    S.cwvData[url]={error:friendly};
     cb();
   });
 }
