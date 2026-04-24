@@ -95,7 +95,7 @@ var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market
   customStart:'',customEnd:'',customPrevStart:'',customPrevEnd:'',reportMd:null,
   kwSearch:'',kwActiveUrl:null,ga4Sort:'ke',ga4SortCol:'ke',compareMode:true,
   decayReport:null,decayMinClicks:20,decayMinPct:15,decayPageType:'all',
-  cwvData:{},cwvRunning:false,cwvStrategy:'mobile',cwvLastRaw:null,cwvReport:null,cwvPageType:'money',cwvFilter:'all',
+  cwvData:{},cwvRunning:false,cwvStrategy:'mobile',cwvLastRaw:null,cwvReport:null,cwvPageType:'money',cwvFilter:'all',cwvLimit:20,
   cwvApiKey:(function(){try{return localStorage.getItem('cwv_api_key')||'';}catch(e){return'';}}())};
 var MARKETS={
   all:   {label:'All markets',       prefix:null},
@@ -535,7 +535,9 @@ window.rGA4=rGA4;
     var badge=ptBadge(pt);
     var pageDisplay=r.page.replace(/^https?:\/\/[^/]+/,'');
     if(!pageDisplay||pageDisplay==='/')pageDisplay=r.page;
-    var cvCol=cv>=25?'#27AE60':cv>=12?'#E91E8C':cv<3&&r.views>50?'#E05C3A':'#888';
+    var cvCol=cv===0?'#444':cv>=20?'#27AE60':cv>=10?'#D4882A':'#888';
+    var cvLabel=cv===0?'—':cv.toFixed(2)+'%';
+    var cvWeight=cv>=20||cv===0?'700':'400';
     var row='<tr>'
       +'<td>'+badge+'</td>'
       +'<td class="url-cell" style="font-family:monospace;font-size:10px;color:#aaa" title="'+esc(r.page)+'">'+esc(pageDisplay)+'</td>'
@@ -554,13 +556,20 @@ window.rGA4=rGA4;
       row+='<td class="r" style="color:#555">'+fmt(r.keyEventsPrev||0)+'</td>'
         +'<td class="r" style="color:'+kdCol+';font-weight:'+(kD!==null?'700':'400')+'">'+kdStr+'</td>';
     }
-    row+='<td class="r" style="color:'+cvCol+';font-weight:'+(cv>=25||cv<3?'700':'400')+'">'+cv.toFixed(2)+'%</td>'
+    row+='<td class="r" style="color:'+cvCol+';font-weight:'+cvWeight+'">'+cvLabel+'</td>'
       +'<td class="r" style="color:'+(r.engTime<10&&r.views>30?'#E05C3A':'#555')+'">'+fmtTime(r.engTime)+'</td>'
       +'</tr>';
     return row;
   }).join('');
 
-  gt.innerHTML='<div class="tbl"><table><thead>'+thead+'</thead><tbody>'+tbodyRows+'</tbody></table></div>';
+  var convLegend='<div style="display:flex;gap:16px;margin-bottom:8px;flex-wrap:wrap;font-size:10px">'
+    +'<span style="color:#888;font-weight:700">Conv.% key:</span>'
+    +'<span style="color:#27AE60">\u25cf \u226520% Good</span>'
+    +'<span style="color:#D4882A">\u25cf 10\u201319% Average</span>'
+    +'<span style="color:#888">\u25cf 1\u20139% Low</span>'
+    +'<span style="color:#444">\u25cf 0% No conversions</span>'
+    +'</div>';
+  gt.innerHTML=convLegend+'<div class="tbl"><table><thead>'+thead+'</thead><tbody>'+tbodyRows+'</tbody></table></div>';
 
   // Update chart — exit clicks by top pages
   var top=src.slice(0,10);
@@ -1098,7 +1107,7 @@ function tabCWV(){
       if(cwvPageType==='casino')return t==='casino';
       if(cwvPageType==='news')  return t==='news';
       return true; // 'all'
-    }).sort(function(a,b){return b.lc-a.lc;}).slice(0,20);
+    }).sort(function(a,b){return b.lc-a.lc;}).slice(0,S.cwvLimit||20);
   }
 
   var checked=Object.keys(S.cwvData).length;
@@ -1137,7 +1146,11 @@ function tabCWV(){
     html+='<option value="'+o.v+'"'+(cwvFilter===o.v?' selected':'')+'>'+o.l+'</option>';
   });
   html+='</select>';
-  html+='<span style="font-size:10px;color:#444;margin-left:4px">Checking top '+candidates.length+' pages for '+esc(mktLabel)+'</span>';
+  html+='<span style="font-size:10px;color:#444;margin-left:4px">Checking top '
+    +'<select onchange="S.cwvLimit=+this.value;S.cwvData={};tabCWV()" style="height:22px;font-size:10px;border:1px solid #333;border-radius:4px;background:var(--bg3);color:#aaa;padding:0 4px">'
+    +[10,15,20,30].map(function(n){return'<option value="'+n+'"'+(( S.cwvLimit||20)===n?' selected':'')+'>'+n+'</option>';}).join('')
+    +'</select>'
+    +' pages for '+esc(mktLabel)+'</span>';
   html+='</div>';
 
   // API Key + Custom URL row
@@ -1406,7 +1419,7 @@ window.runCWV=function(){
     if(cwvPT==='casino')return t==='casino';
     if(cwvPT==='news')  return t==='news';
     return true;
-  }).sort(function(a,b){return b.lc-a.lc;}).slice(0,20);
+  }).sort(function(a,b){return b.lc-a.lc;}).slice(0,S.cwvLimit||20);
 
   var urls=candidates.map(function(p){
     var url=p.key;
