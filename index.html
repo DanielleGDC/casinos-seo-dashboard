@@ -94,7 +94,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market:'all',dateRange:'28d',
   customStart:'',customEnd:'',customPrevStart:'',customPrevEnd:'',reportMd:null,
   kwSearch:'',kwActiveUrl:null,ga4Sort:'ke',ga4SortCol:'ke',compareMode:true,
-  cwvData:{},cwvRunning:false,cwvStrategy:'mobile'};
+  cwvData:{},cwvRunning:false,cwvStrategy:'mobile',cwvLastRaw:null};
 var MARKETS={
   all:   {label:'All markets',       prefix:null},
   gx:    {label:'\uD83C\uDF0D GX / Global',    prefix:null, gx:true},
@@ -823,6 +823,12 @@ function tabCWV(){
   html+='</div>';
 
   html+='<div id="cwvProgress" style="font-size:10px;color:#555;margin-top:8px;min-height:14px"></div>';
+  // Debug button — shows raw API response to diagnose issues
+  if(S.cwvLastRaw){
+    html+='<details style="margin-top:6px"><summary style="font-size:10px;color:#444;cursor:pointer">Show raw API response (debug)</summary>'
+      +'<pre style="font-size:9px;color:#555;background:#111;border-radius:6px;padding:8px;overflow:auto;max-height:200px;margin-top:4px">'+esc(JSON.stringify(S.cwvLastRaw,null,2).slice(0,3000))+'</pre>'
+      +'</details>';
+  }
   html+='</div>';
 
   // Legend
@@ -987,23 +993,29 @@ function _checkCWVQueue(urls,idx){
 function _fetchCWV(url,cb){
   var apiUrl='https://www.googleapis.com/pagespeedonline/v5/runPagespeed'
     +'?url='+encodeURIComponent(url)
-    +'&strategy='+S.cwvStrategy
-    +'&category=performance';
+    +'&strategy='+S.cwvStrategy;
+  // Note: no &category=performance filter — get full response
 
   fetch(apiUrl)
-  .then(function(r){return r.json();})
+  .then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status+' '+r.statusText);
+    return r.json();
+  })
   .then(function(d){
-    // Check for API-level error first
+    // Store full raw response for debugging
+    S.cwvLastRaw=d;
+
+    // Check for Google API error
     if(d.error){
-      S.cwvData[url]={error:'API error '+d.error.code+': '+d.error.message};
+      S.cwvData[url]={error:'Google API: '+d.error.code+' — '+d.error.message};
       cb();return;
     }
 
-    var result={url:url,hasFieldData:false};
+    var result={url:url,hasFieldData:false,rawKeys:Object.keys(d).join(',')};
 
-    // 1. Try URL-level field data (CrUX for specific page)
+    // 1. Page-level field data (CrUX)
     var lx=d.loadingExperience;
-    if(lx&&lx.metrics&&Object.keys(lx.metrics).length>0){
+    if(lx&&lx.metrics&&lx.overall_category&&lx.overall_category!=='NONE'){
       var m=lx.metrics;
       if(m.LARGEST_CONTENTFUL_PAINT_MS)    result.lcp =m.LARGEST_CONTENTFUL_PAINT_MS.percentile;
       if(m.CUMULATIVE_LAYOUT_SHIFT_SCORE)  result.cls =(m.CUMULATIVE_LAYOUT_SHIFT_SCORE.percentile||0)/100;
@@ -1014,10 +1026,10 @@ function _fetchCWV(url,cb){
       result.fieldDataSource='page';
     }
 
-    // 2. Fallback to origin-level field data (whole domain CrUX — always exists for major sites)
+    // 2. Origin-level field data (whole domain)
     if(!result.hasFieldData){
       var ox=d.originLoadingExperience;
-      if(ox&&ox.metrics&&Object.keys(ox.metrics).length>0){
+      if(ox&&ox.metrics&&ox.overall_category&&ox.overall_category!=='NONE'){
         var om=ox.metrics;
         if(om.LARGEST_CONTENTFUL_PAINT_MS)    result.lcp =om.LARGEST_CONTENTFUL_PAINT_MS.percentile;
         if(om.CUMULATIVE_LAYOUT_SHIFT_SCORE)  result.cls =(om.CUMULATIVE_LAYOUT_SHIFT_SCORE.percentile||0)/100;
@@ -1029,31 +1041,32 @@ function _fetchCWV(url,cb){
       }
     }
 
-    // 3. Lighthouse lab data (always present — synthetic test run)
+    // 3. Lighthouse lab data (synthetic run — always present)
     var lr=d.lighthouseResult;
     if(lr){
-      if(lr.categories&&lr.categories.performance){
-        result.score=lr.categories.performance.score;
-      }
+      var cats=lr.categories||{};
+      var perf=cats.performance||cats['performance']||null;
+      if(perf&&perf.score!=null)result.score=perf.score;
+
       var audits=lr.audits||{};
-      // Only use lab data if we don't have field data for a metric
-      if(result.lcp==null&&audits['largest-contentful-paint'])  result.lcp =audits['largest-contentful-paint'].numericValue;
-      if(result.cls==null&&audits['cumulative-layout-shift'])   result.cls =audits['cumulative-layout-shift'].numericValue;
-      if(result.inp==null&&audits['total-blocking-time'])       result.inp =audits['total-blocking-time'].numericValue;
-      if(result.fcp==null&&audits['first-contentful-paint'])    result.fcp =audits['first-contentful-paint'].numericValue;
-      if(result.ttfb==null&&audits['server-response-time'])     result.ttfb=audits['server-response-time'].numericValue;
+      if(result.lcp==null&&audits['largest-contentful-paint'])  result.lcp =audits['largest-contentful-paint'].numericValue||null;
+      if(result.cls==null&&audits['cumulative-layout-shift'])   result.cls =audits['cumulative-layout-shift'].numericValue||null;
+      if(result.inp==null&&audits['total-blocking-time'])       result.inp =audits['total-blocking-time'].numericValue||null;
+      if(result.fcp==null&&audits['first-contentful-paint'])    result.fcp =audits['first-contentful-paint'].numericValue||null;
+      if(result.ttfb==null&&audits['server-response-time'])     result.ttfb=audits['server-response-time'].numericValue||null;
+      result.hasLighthouse=true;
     }
 
-    // If we have absolutely nothing useful, mark as no data
+    // Show raw keys if still no data (debugging)
     if(result.score==null&&result.lcp==null&&result.fcp==null){
-      S.cwvData[url]={error:'No data — page may not be indexed or have enough traffic'};
+      S.cwvData[url]={error:'No metrics in response. Keys: '+result.rawKeys+(lr?'' :' — no lighthouseResult')};
     } else {
       S.cwvData[url]=result;
     }
     cb();
   })
   .catch(function(e){
-    S.cwvData[url]={error:'Request failed: '+e.message};
+    S.cwvData[url]={error:'Fetch failed: '+e.message};
     cb();
   });
 }
