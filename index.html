@@ -779,7 +779,6 @@ function cwvScoreBadge(score){
   var col=pct>=90?'#27AE60':pct>=50?'#D4882A':'#E05C3A';
   return'<span style="background:'+col+';color:#fff;border-radius:50%;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">'+pct+'</span>';
 }
-
 function tabCWV(){
   var g=S.gsc,a=S.ga4;
   var mktKey=S.market||'all';
@@ -901,7 +900,7 @@ function tabCWV(){
         +'<td class="r">'+cwvBadge('inp',d?d.inp:null)+'</td>'
         +'<td class="r">'+cwvBadge('fcp',d?d.fcp:null)+'</td>'
         +'<td class="r">'+cwvBadge('ttfb',d?d.ttfb:null)+'</td>'
-        +'<td class="r" style="color:#888">'+fmt(clicks)+'</td>'
+        +'<td class="r" style="color:#888">'+fmt(clicks)+(d&&d.fieldDataSource?'<div style="font-size:8px;color:#444">'+(d.fieldDataSource==='origin'?'origin avg':'page data')+'</div>':'')+'</td>'
         +'</tr>';
     });
     html+='</tbody></table></div>';
@@ -980,8 +979,8 @@ function _checkCWVQueue(urls,idx){
 
   _fetchCWV(url,function(){
     tabCWV();
-    // Small delay to avoid rate limiting
-    setTimeout(function(){_checkCWVQueue(urls,idx+1);},800);
+    // 1.2s delay between requests — avoid rate limiting without API key
+    setTimeout(function(){_checkCWVQueue(urls,idx+1);},1200);
   });
 }
 
@@ -994,42 +993,67 @@ function _fetchCWV(url,cb){
   fetch(apiUrl)
   .then(function(r){return r.json();})
   .then(function(d){
-    var result={};
+    // Check for API-level error first
+    if(d.error){
+      S.cwvData[url]={error:'API error '+d.error.code+': '+d.error.message};
+      cb();return;
+    }
 
-    // Field data (CrUX - real user data) — preferred
+    var result={url:url,hasFieldData:false};
+
+    // 1. Try URL-level field data (CrUX for specific page)
     var lx=d.loadingExperience;
-    if(lx&&lx.metrics){
+    if(lx&&lx.metrics&&Object.keys(lx.metrics).length>0){
       var m=lx.metrics;
-      if(m.LARGEST_CONTENTFUL_PAINT_MS)result.lcp=m.LARGEST_CONTENTFUL_PAINT_MS.percentile;
-      if(m.CUMULATIVE_LAYOUT_SHIFT_SCORE)result.cls=m.CUMULATIVE_LAYOUT_SHIFT_SCORE.percentile/100;
-      if(m.INTERACTION_TO_NEXT_PAINT)result.inp=m.INTERACTION_TO_NEXT_PAINT.percentile;
-      if(m.FIRST_CONTENTFUL_PAINT_MS)result.fcp=m.FIRST_CONTENTFUL_PAINT_MS.percentile;
+      if(m.LARGEST_CONTENTFUL_PAINT_MS)    result.lcp =m.LARGEST_CONTENTFUL_PAINT_MS.percentile;
+      if(m.CUMULATIVE_LAYOUT_SHIFT_SCORE)  result.cls =(m.CUMULATIVE_LAYOUT_SHIFT_SCORE.percentile||0)/100;
+      if(m.INTERACTION_TO_NEXT_PAINT)      result.inp =m.INTERACTION_TO_NEXT_PAINT.percentile;
+      if(m.FIRST_CONTENTFUL_PAINT_MS)      result.fcp =m.FIRST_CONTENTFUL_PAINT_MS.percentile;
       if(m.EXPERIMENTAL_TIME_TO_FIRST_BYTE)result.ttfb=m.EXPERIMENTAL_TIME_TO_FIRST_BYTE.percentile;
       result.hasFieldData=true;
+      result.fieldDataSource='page';
     }
 
-    // Lab data (Lighthouse) — fallback if no field data
+    // 2. Fallback to origin-level field data (whole domain CrUX — always exists for major sites)
+    if(!result.hasFieldData){
+      var ox=d.originLoadingExperience;
+      if(ox&&ox.metrics&&Object.keys(ox.metrics).length>0){
+        var om=ox.metrics;
+        if(om.LARGEST_CONTENTFUL_PAINT_MS)    result.lcp =om.LARGEST_CONTENTFUL_PAINT_MS.percentile;
+        if(om.CUMULATIVE_LAYOUT_SHIFT_SCORE)  result.cls =(om.CUMULATIVE_LAYOUT_SHIFT_SCORE.percentile||0)/100;
+        if(om.INTERACTION_TO_NEXT_PAINT)      result.inp =om.INTERACTION_TO_NEXT_PAINT.percentile;
+        if(om.FIRST_CONTENTFUL_PAINT_MS)      result.fcp =om.FIRST_CONTENTFUL_PAINT_MS.percentile;
+        if(om.EXPERIMENTAL_TIME_TO_FIRST_BYTE)result.ttfb=om.EXPERIMENTAL_TIME_TO_FIRST_BYTE.percentile;
+        result.hasFieldData=true;
+        result.fieldDataSource='origin';
+      }
+    }
+
+    // 3. Lighthouse lab data (always present — synthetic test run)
     var lr=d.lighthouseResult;
     if(lr){
-      result.score=lr.categories&&lr.categories.performance?lr.categories.performance.score:null;
+      if(lr.categories&&lr.categories.performance){
+        result.score=lr.categories.performance.score;
+      }
       var audits=lr.audits||{};
-      if(!result.lcp&&audits['largest-contentful-paint'])result.lcp=audits['largest-contentful-paint'].numericValue;
-      if(!result.cls&&audits['cumulative-layout-shift'])result.cls=audits['cumulative-layout-shift'].numericValue;
-      if(!result.inp&&audits['interactive'])result.inp=audits['interactive'].numericValue;
-      if(!result.fcp&&audits['first-contentful-paint'])result.fcp=audits['first-contentful-paint'].numericValue;
-      if(!result.ttfb&&audits['server-response-time'])result.ttfb=audits['server-response-time'].numericValue;
-      result.hasFieldData=result.hasFieldData||false;
+      // Only use lab data if we don't have field data for a metric
+      if(result.lcp==null&&audits['largest-contentful-paint'])  result.lcp =audits['largest-contentful-paint'].numericValue;
+      if(result.cls==null&&audits['cumulative-layout-shift'])   result.cls =audits['cumulative-layout-shift'].numericValue;
+      if(result.inp==null&&audits['total-blocking-time'])       result.inp =audits['total-blocking-time'].numericValue;
+      if(result.fcp==null&&audits['first-contentful-paint'])    result.fcp =audits['first-contentful-paint'].numericValue;
+      if(result.ttfb==null&&audits['server-response-time'])     result.ttfb=audits['server-response-time'].numericValue;
     }
 
-    if(!result.score&&!result.lcp){
-      result={error:'No data available'};
+    // If we have absolutely nothing useful, mark as no data
+    if(result.score==null&&result.lcp==null&&result.fcp==null){
+      S.cwvData[url]={error:'No data — page may not be indexed or have enough traffic'};
+    } else {
+      S.cwvData[url]=result;
     }
-
-    S.cwvData[url]=result;
     cb();
   })
   .catch(function(e){
-    S.cwvData[url]={error:e.message||'Request failed'};
+    S.cwvData[url]={error:'Request failed: '+e.message};
     cb();
   });
 }
