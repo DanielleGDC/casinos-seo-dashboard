@@ -313,7 +313,7 @@ function tabPositions(){
   var ptSel=PT_SEL.replace('id="PFXPT"','id="p_pt"');
   var cd=g.pages.filter(function(p){return p.lp>0&&p.pp>0;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,18);
   $('tc').innerHTML='<div class="card"><div class="sec">Position movement [GSC] \u2014 '+esc(dr)+(g.hasComparison?' (comparison included)':'')+'</div>'+LEGEND+'<div style="height:'+Math.max(320,cd.length*40+80)+'px"><canvas id="cPF"></canvas></div></div>'
-    +mkFbar('p_','Filter by page path...',[{v:'all',l:'All pages'}],[{v:'gain',l:'Best gainers'},{v:'loss',l:'Biggest declines'},{v:'clicks',l:'Most clicks'},{v:'impr',l:'Most impressions'},{v:'pos',l:'Best position'}],ptSel)+'<div id="pTbl"></div>';
+    +mkFbar('p_','Filter by page path...',[{v:'all',l:'All pages'}],[{v:'gain',l:'Best gainers'},{v:'loss',l:'Biggest declines'},{v:'clicks',l:'Most clicks'},{v:'impr',l:'Most impressions'},{v:'pos',l:'Best position'}],ptSel+csvBtn('pTbl','gsc-positions'))+'<div id="pTbl"></div>';
   bindFbar('p_',rPos);rPos();
   var chartPages=g.pages.filter(function(p){return matchMarket(p.key,S.market||'all');});
   posChart('cPF',chartPages,18);
@@ -436,7 +436,7 @@ function tabGA4(){
     +mkFbar('g_','Filter by page URL...',
       [{v:'all',l:'All pages'},{v:'money',l:'Money pages only'}],
       [{v:'ke',l:'\u2193 Exit Click Goals'},{v:'views',l:'\u2193 Most views'},{v:'conv',l:'\u2193 Best conv. rate'},{v:'lowconv',l:'\u2191 Worst conv. rate'},{v:'eng',l:'\u2193 Most engaged'},{v:'vdrop',l:'\u2193 Biggest view drop'}],
-      ptSel)
+      ptSel+csvBtn('gTbl','ga4-pages'))
     +'<div id="gTbl"></div>';
 
   bindFbar('g_',rGA4);
@@ -662,7 +662,7 @@ function tabKeywords(){
 
   // Table
   var hasCmp=g.hasComparison&&S.compareMode;
-  html+='<div class="tbl"><table>';
+  html+='<div id="kwTbl" class="tbl"><table>';
   html+='<thead><tr>';
   html+='<th>URL'+(hasPageData?' <span style="color:#444;font-weight:400;text-transform:none;font-size:8px">(click to filter)</span>':'')+'</th>';
   html+='<th>Keyword</th>';
@@ -713,6 +713,8 @@ function tabKeywords(){
   });
 
   html+='</tbody></table></div>';
+  // CSV export button
+  html+='<div style="text-align:right;margin-top:8px">'+csvBtn('kwTbl','gsc-keywords-'+S.kw)+'</div>';
   $('tc').innerHTML=html;
   _bindKwEvents();
 }
@@ -889,7 +891,7 @@ function tabDecay(){
     var display=allPages;
     if(S.decaySearch){var sq=S.decaySearch.toLowerCase();display=display.filter(function(p){return p.key.toLowerCase().indexOf(sq)>=0;});}
 
-    html+='<div class="tbl"><table><thead><tr>'
+    html+='<div id="decayTbl" class="tbl"><table><thead><tr>'
       +'<th>Severity</th>'
       +'<th>Type</th>'
       +'<th>Page</th>'
@@ -924,10 +926,7 @@ function tabDecay(){
         +'</tr>';
     });
     html+='</tbody></table></div>';
-  }
-
-  // AI Analysis button
-  if(allPages.length){
+    html+='<div style="text-align:right;margin-top:8px">'+csvBtn('decayTbl','content-decay')+'</div>';
     html+='<div style="background:var(--bg2);border:1px solid #222;border-radius:11px;padding:14px 16px;margin-top:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">';
     html+='<div style="font-size:11px;color:#888">Get prioritised recovery recommendations from Claude</div>';
     html+='<button class="bp" id="decayReportBtn" onclick="runDecayReport()" style="font-size:12px;padding:8px 18px">\uD83E\uDD16 Generate decay recovery plan</button>';
@@ -1053,7 +1052,38 @@ function _renderDecayReport(text){
 }
 
 /* ============================================================
-   CORE WEB VITALS TAB
+   CSV EXPORT
+   ============================================================ */
+window.exportCSV=function(tableId,filename){
+  var tbl=document.querySelector('#'+tableId+' table');
+  if(!tbl){alert('No data to export yet');return;}
+  var rows=Array.from(tbl.querySelectorAll('tr'));
+  var csv=rows.map(function(row){
+    return Array.from(row.querySelectorAll('th,td')).map(function(cell){
+      var text=cell.innerText||cell.textContent||'';
+      text=text.replace(/\n/g,' ').trim();
+      // Wrap in quotes if contains comma, quote, or newline
+      if(text.indexOf(',')>=0||text.indexOf('"')>=0)text='"'+text.replace(/"/g,'""')+'"';
+      return text;
+    }).join(',');
+  }).join('\n');
+  var mktKey=S.market||'all';
+  var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label.replace(/\s+/g,'-').toLowerCase():mktKey;
+  var fullName=(filename+'-'+mktLabel+'-'+new Date().toISOString().slice(0,10)+'.csv');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download=fullName;
+  document.body.appendChild(a);a.click();
+  document.body.removeChild(a);URL.revokeObjectURL(url);
+};
+
+function csvBtn(tableId,filename,label){
+  return'<button onclick="exportCSV(\''+tableId+'\',\''+filename+'\')" '
+    +'style="height:26px;padding:0 12px;font-size:10px;border-radius:6px;border:1px solid #333;'
+    +'color:#888;background:transparent;cursor:pointer;display:inline-flex;align-items:center;gap:5px">'
+    +'<svg viewBox="0 0 16 16" style="width:11px;height:11px;fill:currentColor"><path d="M8 11L4 7h2.5V3h3v4H12L8 11zm-5 3h10v1.5H3V14z"/></svg>'
+    +(label||'Export CSV')+'</button>';
+}
    ============================================================ */
 var CWV_THRESHOLDS={
   lcp:  {good:2500, poor:4000,  unit:'ms',  label:'LCP',  name:'Largest Contentful Paint'},
@@ -1253,9 +1283,7 @@ function tabCWV(){
   if(!filteredRows.length&&cwvFilter!=='all'){
     html+='<div class="empty">\u2705 No pages match this filter \u2014 all checked pages are in good shape!</div>';
   } else if(filteredRows.length){
-    html+='<div class="tbl"><table><thead><tr>'
-      +'<th>Page</th><th>Type</th>'
-      +'<th class="r">Score</th>'
+    html+='<div id="cwvTbl" class="tbl"><table><thead><tr>'
       +'<th class="r" title="'+CWV_THRESHOLDS.lcp.name+'">LCP</th>'
       +'<th class="r" title="'+CWV_THRESHOLDS.cls.name+'">CLS</th>'
       +'<th class="r" title="'+CWV_THRESHOLDS.inp.name+'">INP</th>'
@@ -1299,6 +1327,7 @@ function tabCWV(){
         +'</tr>';
     });
     html+='</tbody></table></div>';
+    html+='<div style="text-align:right;margin-top:8px">'+csvBtn('cwvTbl','core-web-vitals')+'</div>';
 
     // Threshold reference
     html+='<div style="margin-top:10px;background:var(--bg3);border-radius:8px;padding:10px 14px;font-size:10px;color:#555">';
