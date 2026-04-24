@@ -94,7 +94,8 @@ tr:hover td{background:rgba(255,255,255,.03)}
 var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market:'all',dateRange:'28d',
   customStart:'',customEnd:'',customPrevStart:'',customPrevEnd:'',reportMd:null,
   kwSearch:'',kwActiveUrl:null,ga4Sort:'ke',ga4SortCol:'ke',compareMode:true,
-  cwvData:{},cwvRunning:false,cwvStrategy:'mobile',cwvLastRaw:null,cwvApiKey:(function(){try{return localStorage.getItem('cwv_api_key')||'';}catch(e){return'';}}())};
+  cwvData:{},cwvRunning:false,cwvStrategy:'mobile',cwvLastRaw:null,cwvReport:null,cwvPageType:'money',cwvFilter:'all',
+  cwvApiKey:(function(){try{return localStorage.getItem('cwv_api_key')||'';}catch(e){return'';}}())};
 var MARKETS={
   all:   {label:'All markets',       prefix:null},
   gx:    {label:'\uD83C\uDF0D GX / Global',    prefix:null, gx:true},
@@ -782,14 +783,22 @@ function cwvScoreBadge(score){
 function tabCWV(){
   var g=S.gsc,a=S.ga4;
   var mktKey=S.market||'all';
+  var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
+  var cwvPageType=S.cwvPageType||'money';
+  var cwvFilter=S.cwvFilter||'all';
 
-  // Get top BOFU/state/casino pages for this market
+  // Build candidates based on page type filter
   var candidates=[];
   if(g){
     candidates=g.pages.filter(function(p){
       if(!matchMarket(p.key,mktKey))return false;
       var t=getPageType(p.key);
-      return t==='bofu'||t==='state'||t==='casino';
+      if(cwvPageType==='money') return t==='bofu'||t==='state'||t==='casino';
+      if(cwvPageType==='bofu')  return t==='bofu';
+      if(cwvPageType==='state') return t==='state';
+      if(cwvPageType==='casino')return t==='casino';
+      if(cwvPageType==='news')  return t==='news';
+      return true; // 'all'
     }).sort(function(a,b){return b.lc-a.lc;}).slice(0,20);
   }
 
@@ -800,8 +809,8 @@ function tabCWV(){
   html+='<div style="background:var(--bg2);border:1px solid #222;border-radius:11px;padding:14px 16px;margin-bottom:14px">';
   html+='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">';
   html+='<div>';
-  html+='<div style="font-size:13px;font-weight:700;color:#F0F0F0;margin-bottom:3px">\u26a1 Core Web Vitals</div>';
-  html+='<div style="font-size:11px;color:#555">Live data from Google PageSpeed Insights</div>';
+  html+='<div style="font-size:13px;font-weight:700;color:#F0F0F0;margin-bottom:3px">\u26a1 Core Web Vitals <span style="font-size:11px;font-weight:400;color:#E91E8C;margin-left:6px">'+esc(mktLabel)+'</span></div>';
+  html+='<div style="font-size:11px;color:#555">Live data from Google PageSpeed Insights \u00b7 Change market using the dropdown in the top bar</div>';
   html+='</div>';
   html+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
   html+='<div style="display:flex;background:var(--bg3);border:1px solid #333;border-radius:7px;overflow:hidden">';
@@ -809,20 +818,37 @@ function tabCWV(){
   html+='<button onclick="S.cwvStrategy=\'desktop\';tabCWV()" style="border:none;border-radius:0;padding:5px 12px;font-size:11px;background:'+(S.cwvStrategy==='desktop'?'#E91E8C':'transparent')+';color:'+(S.cwvStrategy==='desktop'?'#fff':'#888')+'">\uD83D\uDDA5 Desktop</button>';
   html+='</div>';
   if(!S.cwvRunning){
-    html+='<button id="cwvRunBtn" onclick="runCWV()" style="background:var(--pink);color:#fff;border:none;border-radius:7px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer">'+(checked>0?'\u27f3 Re-check pages':'\u25b6 Check top pages')+'</button>';
+    html+='<button id="cwvRunBtn" onclick="runCWV()" style="background:var(--pink);color:#fff;border:none;border-radius:7px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer">'+(checked>0?'\u27f3 Re-check':'\u25b6 Check pages')+'</button>';
   } else {
     html+='<button disabled style="background:#333;color:#666;border:none;border-radius:7px;padding:7px 16px;font-size:12px">Checking\u2026</button>';
   }
   html+='</div></div>';
 
+  // Page type + filter row
+  html+='<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+  html+='<span style="font-size:10px;color:#555">Page type:</span>';
+  html+='<select id="cwvPageTypeSel" onchange="S.cwvPageType=this.value;S.cwvData={};tabCWV()" style="height:26px;font-size:10px;border:1px solid #444;border-radius:6px;background:var(--bg3);color:#ccc;padding:0 6px">';
+  [{v:'money',l:'Money pages (BOFU+State+Casino)'},{v:'bofu',l:'BOFU only'},{v:'state',l:'State pages only'},{v:'casino',l:'Casino brands'},{v:'news',l:'News'},{v:'all',l:'All page types'}].forEach(function(o){
+    html+='<option value="'+o.v+'"'+(cwvPageType===o.v?' selected':'')+'>'+o.l+'</option>';
+  });
+  html+='</select>';
+  html+='<span style="font-size:10px;color:#555;margin-left:6px">Show:</span>';
+  html+='<select id="cwvFilterSel" onchange="S.cwvFilter=this.value;tabCWV()" style="height:26px;font-size:10px;border:1px solid #444;border-radius:6px;background:var(--bg3);color:#ccc;padding:0 6px">';
+  [{v:'all',l:'All checked pages'},{v:'poor',l:'Poor only'},{v:'attention',l:'Needs attention (poor or NI)'}].forEach(function(o){
+    html+='<option value="'+o.v+'"'+(cwvFilter===o.v?' selected':'')+'>'+o.l+'</option>';
+  });
+  html+='</select>';
+  html+='<span style="font-size:10px;color:#444;margin-left:4px">Checking top '+candidates.length+' pages for '+esc(mktLabel)+'</span>';
+  html+='</div>';
+
   // API Key + Custom URL row
   var savedKey=S.cwvApiKey||'';
-  html+='<div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+  html+='<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
   html+='<span style="font-size:10px;color:#555;white-space:nowrap">API Key:</span>';
-  html+='<input id="cwvApiKeyInput" type="password" placeholder="Paste free Google PageSpeed API key (console.cloud.google.com)" value="'+esc(savedKey)+'" style="flex:1;min-width:200px;height:28px;font-size:10px;border:1px solid '+(savedKey?'rgba(39,174,96,.4)':'#333')+'">';
-  html+='<button onclick="S.cwvApiKey=$(\'cwvApiKeyInput\').value;try{localStorage.setItem(\'cwv_api_key\',S.cwvApiKey);}catch(e){}tabCWV()" style="height:28px;padding:0 10px;font-size:10px;border-radius:6px;border:1px solid #444;color:#aaa;background:var(--bg3);cursor:pointer;white-space:nowrap">\u2713 Save</button>';
-  html+='<input id="cwvCustomUrl" type="text" placeholder="Check any URL e.g. /us/bonus/..." style="flex:1;min-width:180px;height:28px;font-size:10px">';
-  html+='<button onclick="runCWVSingle()" style="height:28px;padding:0 12px;font-size:10px;border-radius:6px;border:1px solid #444;color:#aaa;background:var(--bg3);cursor:pointer;white-space:nowrap">Check URL</button>';
+  html+='<input id="cwvApiKeyInput" type="password" placeholder="Paste free Google PageSpeed API key" value="'+esc(savedKey)+'" style="flex:1;min-width:160px;height:26px;font-size:10px;border:1px solid '+(savedKey?'rgba(39,174,96,.4)':'#333')+'">';
+  html+='<button onclick="S.cwvApiKey=$(\'cwvApiKeyInput\').value;try{localStorage.setItem(\'cwv_api_key\',S.cwvApiKey);}catch(e){}tabCWV()" style="height:26px;padding:0 10px;font-size:10px;border-radius:6px;border:1px solid #444;color:#aaa;background:var(--bg3);cursor:pointer;white-space:nowrap">\u2713 Save</button>';
+  html+='<input id="cwvCustomUrl" type="text" placeholder="Or check any URL e.g. /us/bonus/..." style="flex:1;min-width:160px;height:26px;font-size:10px">';
+  html+='<button onclick="runCWVSingle()" style="height:26px;padding:0 12px;font-size:10px;border-radius:6px;border:1px solid #444;color:#aaa;background:var(--bg3);cursor:pointer;white-space:nowrap">Check URL</button>';
   html+='</div>';
 
   html+='<div id="cwvProgress" style="font-size:10px;color:#555;margin-top:8px;min-height:14px">'
@@ -864,12 +890,46 @@ function tabCWV(){
     }
   }
 
-  // Results table
+  // Apply attention filter to results
   var rows=Object.entries(S.cwvData);
-  if(rows.length){
+  var filteredRows=rows.filter(function(entry){
+    var d=entry[1];
+    if(!d||d.error||d.loading)return true; // always show errors
+    if(cwvFilter==='all')return true;
+    var lcpStatus=cwvStatus('lcp',d.lcp);
+    var clsStatus=cwvStatus('cls',d.cls);
+    var inpStatus=cwvStatus('inp',d.inp);
+    var hasPoor=lcpStatus==='poor'||clsStatus==='poor'||inpStatus==='poor';
+    var hasNI=lcpStatus==='needs-improvement'||clsStatus==='needs-improvement'||inpStatus==='needs-improvement';
+    if(cwvFilter==='poor')return hasPoor;
+    if(cwvFilter==='attention')return hasPoor||hasNI;
+    return true;
+  });
+
+  // AI Summary report button
+  var pagesNeedingAttention=rows.filter(function(entry){
+    var d=entry[1];
+    if(!d||d.error||d.loading)return false;
+    return cwvStatus('lcp',d.lcp)!=='good'||cwvStatus('cls',d.cls)!=='good'||cwvStatus('inp',d.inp)!=='good';
+  });
+
+  if(rows.length>0){
+    html+='<div style="background:var(--bg2);border:1px solid #222;border-radius:11px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">';
+    html+='<div style="font-size:11px;color:#888">'+pagesNeedingAttention.length+' of '+rows.length+' checked pages need attention</div>';
+    html+='<div style="display:flex;gap:8px">';
+    html+='<button onclick="runCWVReport()" id="cwvReportBtn" style="background:rgba(233,30,140,.15);border:1px solid rgba(233,30,140,.3);color:#E91E8C;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">\uD83E\uDD16 Generate CWV Report</button>';
+    html+='</div></div>';
+  }
+
+  if(S.cwvReport){
+    html+=_renderCWVReport(S.cwvReport);
+  }
+
+  if(!filteredRows.length&&cwvFilter!=='all'){
+    html+='<div class="empty">\u2705 No pages match this filter \u2014 all checked pages are in good shape!</div>';
+  } else if(filteredRows.length){
     html+='<div class="tbl"><table><thead><tr>'
-      +'<th>Page</th>'
-      +'<th>Type</th>'
+      +'<th>Page</th><th>Type</th>'
       +'<th class="r">Score</th>'
       +'<th class="r" title="'+CWV_THRESHOLDS.lcp.name+'">LCP</th>'
       +'<th class="r" title="'+CWV_THRESHOLDS.cls.name+'">CLS</th>'
@@ -879,18 +939,17 @@ function tabCWV(){
       +'<th class="r">GSC Clicks</th>'
       +'</tr></thead><tbody>';
 
-    // Sort by performance score ascending (worst first)
-    rows.sort(function(a,b){
+    filteredRows.sort(function(a,b){
       var sa=a[1]&&a[1].score!=null?a[1].score:1;
       var sb=b[1]&&b[1].score!=null?b[1].score:1;
       return sa-sb;
     });
 
-    rows.forEach(function(entry){
+    filteredRows.forEach(function(entry){
       var url=entry[0],d=entry[1];
       var pageDisplay=url.replace('https://www.casinos.com','');
       var pt=getPageType(url);
-      var gscPage=g?g.pages.find(function(p){return p.key===url||p.key.replace(/\/$/,'')===url.replace(/\/$/,'')}):null;
+      var gscPage=g?g.pages.find(function(p){return p.key===url||p.key.replace(/\/$/,'')===url.replace(/\/$/,'');}):null;
       var clicks=gscPage?gscPage.lc:0;
 
       if(d&&d.error){
@@ -926,18 +985,95 @@ function tabCWV(){
       return'<span style="margin-right:14px"><strong style="color:#aaa">'+t.label+'</strong> \u2264'+g2+' good, >'+p2+' poor</span>';
     }).join('');
     html+='</div>';
+  }
 
-  } else if(!S.cwvRunning){
+  if(!rows.length&&!S.cwvRunning){
     // Empty state
     html+='<div style="background:var(--bg2);border:1px solid #222;border-radius:11px;padding:40px 20px;text-align:center">';
     html+='<div style="font-size:36px;margin-bottom:10px">\u26a1</div>';
-    html+='<div style="font-size:13px;color:#888;margin-bottom:6px">No CWV data yet</div>';
-    html+='<div style="font-size:11px;color:#555;line-height:1.7;margin-bottom:16px">Click <strong style="color:#F0F0F0">Check top pages</strong> to run PageSpeed Insights on your top BOFU and state pages.<br>Results show live field data from real users via Chrome UX Report.</div>';
-    html+='<div style="font-size:10px;color:#444">Checks '+candidates.length+' pages \u00b7 ~'+(candidates.length*3)+'-'+(candidates.length*5)+'s \u00b7 Free \u00b7 No API key needed</div>';
+    html+='<div style="font-size:13px;color:#888;margin-bottom:6px">No CWV data yet for '+esc(mktLabel)+'</div>';
+    html+='<div style="font-size:11px;color:#555;line-height:1.7;margin-bottom:16px">Click <strong style="color:#F0F0F0">Check pages</strong> to run PageSpeed Insights on your top pages for this market.</div>';
+    html+='<div style="font-size:10px;color:#444">Will check '+candidates.length+' pages \u00b7 ~'+(candidates.length*3)+'-'+(candidates.length*5)+'s</div>';
     html+='</div>';
   }
 
   $('tc').innerHTML=html;
+}
+
+window.runCWVReport=function(){
+  var btn=$('cwvReportBtn');
+  if(btn){btn.disabled=true;btn.textContent='Generating\u2026';}
+
+  var mktKey=S.market||'all';
+  var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
+  var rows=Object.entries(S.cwvData);
+
+  // Build data for prompt
+  var allPages=rows.filter(function(e){return e[1]&&!e[1].error&&!e[1].loading;}).map(function(e){
+    var url=e[0].replace('https://www.casinos.com','');
+    var d=e[1];
+    var lcpS=cwvStatus('lcp',d.lcp),clsS=cwvStatus('cls',d.cls),inpS=cwvStatus('inp',d.inp);
+    var score=d.score!=null?Math.round(d.score*100):null;
+    return{url:url,score:score,lcp:d.lcp,cls:d.cls,inp:d.inp,fcp:d.fcp,ttfb:d.ttfb,
+      lcpS:lcpS,clsS:clsS,inpS:inpS,
+      needsAttention:lcpS!=='good'||clsS!=='good'||inpS!=='good'};
+  });
+
+  var poor=allPages.filter(function(p){return p.lcpS==='poor'||p.clsS==='poor'||p.inpS==='poor';});
+  var ni=allPages.filter(function(p){return(p.lcpS==='needs-improvement'||p.clsS==='needs-improvement'||p.inpS==='needs-improvement')&&p.lcpS!=='poor'&&p.clsS!=='poor'&&p.inpS!=='poor';});
+  var good=allPages.filter(function(p){return!p.needsAttention;});
+
+  function fmtMs(v){return v==null?'N/A':v>=1000?(v/1000).toFixed(1)+'s':Math.round(v)+'ms';}
+
+  var prompt='You are a technical SEO expert. Analyse these Core Web Vitals results for casinos.com '+mktLabel+' pages and generate a concise actionable report.\n\n'
+    +'STRATEGY: '+S.cwvStrategy.toUpperCase()+'\n'
+    +'PAGES CHECKED: '+allPages.length+' | POOR: '+poor.length+' | NEEDS IMPROVEMENT: '+ni.length+' | GOOD: '+good.length+'\n\n'
+    +(poor.length?'POOR PAGES (immediate action needed):\n'+poor.map(function(p){return p.url+' | Score:'+(p.score||'?')+'% | LCP:'+fmtMs(p.lcp)+' ('+p.lcpS+') | CLS:'+(p.cls!=null?p.cls.toFixed(3):'N/A')+' ('+p.clsS+') | INP:'+fmtMs(p.inp)+' ('+p.inpS+') | TTFB:'+fmtMs(p.ttfb);}).join('\n')+'\n\n':'')
+    +(ni.length?'NEEDS IMPROVEMENT:\n'+ni.map(function(p){return p.url+' | Score:'+(p.score||'?')+'% | LCP:'+fmtMs(p.lcp)+' | CLS:'+(p.cls!=null?p.cls.toFixed(3):'N/A')+' | INP:'+fmtMs(p.inp)+' | TTFB:'+fmtMs(p.ttfb);}).join('\n')+'\n\n':'')
+    +(good.length?'PASSING PAGES:\n'+good.map(function(p){return p.url+' ('+p.score+'%)';}).join(', ')+'\n\n':'')
+    +'THRESHOLDS: LCP ≤2.5s good / CLS ≤0.1 good / INP ≤200ms good\n\n'
+    +'Reply with EXACTLY these sections:\n'
+    +'## CWV Summary\n'
+    +'## Pages Needing Immediate Attention\n- [page: specific issue and fix]\n'
+    +'## Common Issues\n- [pattern across pages]\n'
+    +'## Quick Wins\n1. [action]\n2. [action]\n3. [action]\n'
+    +'## What Is Passing';
+
+  fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:900,messages:[{role:'user',content:prompt}]})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    S.cwvReport=d.content&&d.content.length>0?d.content.map(function(c){return c.text||'';}).join(''):(d.error?'Error: '+JSON.stringify(d.error):'No response');
+    if(btn){btn.disabled=false;btn.textContent='\uD83E\uDD16 Generate CWV Report';}
+    tabCWV();
+  })
+  .catch(function(e){
+    if(btn){btn.disabled=false;btn.textContent='\uD83E\uDD16 Generate CWV Report';}
+    S.cwvReport='Error: '+e.message;
+    tabCWV();
+  });
+};
+
+function _renderCWVReport(text){
+  var ST={
+    'CWV Summary':                    {bg:'rgba(39,174,96,.07)',  bc:'#27AE60',tc:'#2ECC71'},
+    'Pages Needing Immediate Attention':{bg:'rgba(224,92,58,.07)', bc:'#E05C3A',tc:'#E8896A'},
+    'Common Issues':                  {bg:'rgba(212,136,42,.07)', bc:'#D4882A',tc:'#F0A93C'},
+    'Quick Wins':                     {bg:'rgba(233,30,140,.07)', bc:'#E91E8C',tc:'#F48FB1'},
+    'What Is Passing':                {bg:'rgba(39,174,96,.07)',  bc:'#27AE60',tc:'#2ECC71'}
+  };
+  var secs=text.split(/^## /m).filter(Boolean);
+  var html='<div style="margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +'<div style="font-size:10px;color:#555">CWV Analysis \u2014 powered by Claude</div>'
+    +'<button onclick="S.cwvReport=null;tabCWV()" style="font-size:11px;padding:4px 10px">Clear report</button>'
+    +'</div>';
+  secs.forEach(function(sec){
+    var parts=sec.split('\n'),title=parts[0].trim(),body=parts.slice(1).join('\n').trim();
+    var st=ST[title]||{bg:'rgba(255,255,255,.03)',bc:'#333',tc:'#888'};
+    html+='<div class="tab-box" style="background:'+st.bg+';border-left-color:'+st.bc+';margin-bottom:8px">'
+      +'<div class="tab-h" style="color:'+st.bc+'">'+esc(title)+'</div>'
+      +'<div class="tab-b" style="color:'+st.tc+'">'+esc(body)+'</div></div>';
+  });
+  return html+'</div>';
 }
 
 window.runCWV=function(){
@@ -948,11 +1084,17 @@ window.runCWV=function(){
   S.cwvData={};
   tabCWV();
 
+  var cwvPT=S.cwvPageType||'money';
   var candidates=g.pages.filter(function(p){
     if(!matchMarket(p.key,mktKey))return false;
     var t=getPageType(p.key);
-    return t==='bofu'||t==='state'||t==='casino';
-  }).sort(function(a,b){return b.lc-a.lc;}).slice(0,15);
+    if(cwvPT==='money') return t==='bofu'||t==='state'||t==='casino';
+    if(cwvPT==='bofu')  return t==='bofu';
+    if(cwvPT==='state') return t==='state';
+    if(cwvPT==='casino')return t==='casino';
+    if(cwvPT==='news')  return t==='news';
+    return true;
+  }).sort(function(a,b){return b.lc-a.lc;}).slice(0,20);
 
   var urls=candidates.map(function(p){
     var url=p.key;
