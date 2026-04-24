@@ -761,17 +761,38 @@ function tabTakeaways(){
 window.runTA=function(){
   var btn=$('genBtn');if(btn){btn.disabled=true;btn.textContent='Analysing...';}
   var g=S.gsc,a=S.ga4;
-  var tp=g?g.pages.slice().sort(function(a,b){return b.li-a.li;}).slice(0,14):[];
-  var gn=g?g.pages.filter(function(p){return p.lp>0&&p.pp>0&&p.pp>p.lp;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,6):[];
-  var ls=g?g.pages.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,5):[];
-  var tq=g?g.queries.slice().sort(function(a,b){return b.li-a.li;}).slice(0,10):[];
-  var op=g?g.queries.filter(function(q){return q.li>200&&q.lp>10&&q.lp<35;}).sort(function(a,b){return b.li-a.li;}).slice(0,6):[];
-  var gm=a?a.rows.filter(function(r){return r.pageType==='bofu'||r.pageType==='Money Page';}).sort(function(a,b){return b.views-a.views;}).slice(0,10):[];
-  var lc=0,pc=0,li=0,pi=0;if(g){g.pages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});}
-  var tv=0,tk=0,tvp=0,tkp=0;gm.forEach(function(r){tv+=r.views;tk+=r.keyEvents;tvp+=r.viewsPrev||0;tkp+=r.keyEventsPrev||0;});
-  var dr=g?(g.ds?drange(g.ds,g.de):g.dateRange):'last period';
   var mktKey=S.market||'all',mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
-  var prompt='Expert SEO analyst for '+(g?g.site:'casinos.com')+' ('+mktLabel+'), period: '+dr+(g&&g.hasComparison?' vs previous period':'')+'.\n\nGSC: Clicks '+pc.toLocaleString()+'\u2192'+lc.toLocaleString()+' ('+pct(lc,pc)+'%) | Impr '+pi.toLocaleString()+'\u2192'+li.toLocaleString()+' ('+pct(li,pi)+'%)\n\nPAGES:\n'+tp.map(function(p){return slug(p.key)+'|'+p.pc+'\u2192'+p.lc+'cl|'+p.pp.toFixed(1)+'\u2192'+p.lp.toFixed(1)+'pos|'+p.li.toLocaleString()+'impr|type:'+getPageType(p.key);}).join('\n')+'\n\nGAINERS: '+gn.map(function(p){return slug(p.key)+' +'+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\nDECLINERS: '+ls.map(function(p){return slug(p.key)+' '+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\n\nQUERIES: '+tq.map(function(q){return'"'+q.key+'" '+q.li.toLocaleString()+'impr '+q.lc+'cl pos'+q.lp.toFixed(1);}).join(' | ')+'\nOPPS: '+op.map(function(q){return'"'+q.key+'" '+q.li.toLocaleString()+'impr pos'+q.lp.toFixed(1);}).join(' | ')+(gm.length?'\n\nGA4: '+tv.toLocaleString()+'v vs '+tvp.toLocaleString()+'v | '+tk.toLocaleString()+'ke vs '+tkp.toLocaleString()+'ke\n'+gm.map(function(r){return r.page+' '+r.views+'v(prev:'+(r.viewsPrev||0)+'v) '+r.keyEvents+'ke(prev:'+(r.keyEventsPrev||0)+'ke) '+(r.views>0?(r.keyEvents/r.views*100).toFixed(1):0)+'%';}).join('\n'):'')+'\n\nReply EXACTLY:\n## Executive summary\n[2 sentences]\n\n## What is working\n- [finding with data]\n\n## Concerns\n- [concern with data]\n\n## Actions for the team\n1. [action]\n2. [action]\n3. [action]\n\n## Keyword opportunities\n- [query: insight]';
+
+  // Filter all data by selected market
+  var mktPages=g?g.pages.filter(function(p){return matchMarket(p.key,mktKey);}):[];
+  var mktQueries=g?g.queries.filter(function(q){return mktKey==='all'||matchMarket(q.page,mktKey);}):[];
+  var mktGA4=a?getGA4FilteredRows(a.rows,mktKey):[];
+  mktGA4.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'other';});
+
+  var tp=mktPages.slice().sort(function(a,b){return b.li-a.li;}).slice(0,14);
+  var gn=mktPages.filter(function(p){return p.lp>0&&p.pp>0&&p.pp>p.lp;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,6);
+  var ls=mktPages.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,5);
+  var tq=mktQueries.slice().sort(function(a,b){return b.li-a.li;}).slice(0,10);
+  var op=mktQueries.filter(function(q){return q.li>200&&q.lp>10&&q.lp<35;}).sort(function(a,b){return b.li-a.li;}).slice(0,6);
+  var gm=mktGA4.filter(function(r){return r.pageType==='bofu'||r.pageType==='casino'||r.pageType==='state'||r.pageType==='Money Page';}).sort(function(a,b){return b.views-a.views;}).slice(0,10);
+
+  var lc=0,pc=0,li=0,pi=0;
+  mktPages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});
+  var tv=0,tk=0,tvp=0,tkp=0;
+  gm.forEach(function(r){tv+=r.views;tk+=r.keyEvents;tvp+=r.viewsPrev||0;tkp+=r.keyEventsPrev||0;});
+  var dr=g?(g.ds?drange(g.ds,g.de):g.dateRange):'last period';
+
+  var prompt='Expert SEO analyst for casinos.com/'+mktLabel+', period: '+dr+(g&&g.hasComparison?' vs previous period':'')+'.\n\n'
+    +'MARKET FOCUS: '+mktLabel+' — only analyse pages and keywords for this market.\n\n'
+    +'GSC ('+mktLabel+'): Clicks '+pc.toLocaleString()+'\u2192'+lc.toLocaleString()+' ('+pct(lc,pc)+'%) | Impr '+pi.toLocaleString()+'\u2192'+li.toLocaleString()+' ('+pct(li,pi)+'%)\n\n'
+    +'TOP PAGES:\n'+tp.map(function(p){return slug(p.key)+'|'+p.pc+'\u2192'+p.lc+'cl|'+p.pp.toFixed(1)+'\u2192'+p.lp.toFixed(1)+'pos|'+p.li.toLocaleString()+'impr|type:'+getPageType(p.key);}).join('\n')
+    +'\n\nGAINERS: '+gn.map(function(p){return slug(p.key)+' +'+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')
+    +'\nDECLINERS: '+ls.map(function(p){return slug(p.key)+' '+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')
+    +'\n\nTOP QUERIES:\n'+tq.map(function(q){return'"'+q.key+'" '+q.li.toLocaleString()+'impr '+q.lc+'cl pos'+q.lp.toFixed(1);}).join('\n')
+    +'\nOPPS: '+op.map(function(q){return'"'+q.key+'" '+q.li.toLocaleString()+'impr pos'+q.lp.toFixed(1);}).join(' | ')
+    +(gm.length?'\n\nGA4 ('+mktLabel+'): '+tv.toLocaleString()+'v vs '+tvp.toLocaleString()+'v | '+tk.toLocaleString()+'ke vs '+tkp.toLocaleString()+'ke\n'+gm.map(function(r){return r.page+' '+r.views+'v(prev:'+(r.viewsPrev||0)+'v) '+r.keyEvents+'ke(prev:'+(r.keyEventsPrev||0)+'ke) '+(r.views>0?(r.keyEvents/r.views*100).toFixed(1):0)+'%';}).join('\n'):'')
+    +'\n\nAll takeaways must be specific to the '+mktLabel+' market only.\n\nReply EXACTLY:\n## Executive summary\n[2 sentences]\n\n## What is working\n- [finding with data]\n\n## Concerns\n- [concern with data]\n\n## Actions for the team\n1. [action]\n2. [action]\n3. [action]\n\n## Keyword opportunities\n- [query: insight]';
+
   fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:900,messages:[{role:'user',content:prompt}]})})
   .then(function(r){return r.json();}).then(function(d){S.ta=d.content&&d.content.length>0?d.content.map(function(c){return c.text||'';}).join(''):(d.error?'API Error: '+JSON.stringify(d.error):'No response \u2014 check ANTHROPIC_API_KEY.');showTA();}).catch(function(e){S.ta='Error: '+e.message;showTA();});
 };
@@ -782,17 +803,25 @@ window.runReport=function(){
   var g=S.gsc,a=S.ga4,mktKey=S.market||'all';
   var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
   var dr=g?(g.ds?drange(g.ds,g.de):g.dateRange):'last period';
-  var lc=0,pc=0,li=0,pi=0;if(g){g.pages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});}
-  var bofuPgs=g?g.pages.filter(function(p){var t=getPageType(p.key);return t==='bofu'||t==='state';}).sort(function(a,b){return b.li-a.li;}).slice(0,20):[];
-  var gainers=g?g.pages.filter(function(p){return p.lp>0&&p.pp>0&&p.pp>p.lp;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,8):[];
-  var decliners=g?g.pages.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,8):[];
-  var opps=g?g.queries.filter(function(q){return q.lp>=10&&q.lp<=20&&q.li>=100&&parseFloat(q.lctr)<3;}).sort(function(a,b){return b.li-a.li;}).slice(0,10):[];
-  if(a)a.rows.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'other';});
-  var mPgs=a?a.rows.filter(function(r){return r.pageType==='bofu'||r.pageType==='casino'||r.pageType==='state'||r.pageType==='Money Page';}).sort(function(a,b){return b.views-a.views;}).slice(0,12):[];
-  var totV=0,totKE=0,totVP=0,totKEP=0;mPgs.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
+
+  // Filter by market
+  var mktPages=g?g.pages.filter(function(p){return matchMarket(p.key,mktKey);}):[];
+  var mktQueries=g?g.queries.filter(function(q){return mktKey==='all'||matchMarket(q.page,mktKey);}):[];
+  var mktGA4=a?getGA4FilteredRows(a.rows,mktKey):[];
+  mktGA4.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'other';});
+
+  var lc=0,pc=0,li=0,pi=0;
+  mktPages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});
+  var bofuPgs=mktPages.filter(function(p){var t=getPageType(p.key);return t==='bofu'||t==='state';}).sort(function(a,b){return b.li-a.li;}).slice(0,20);
+  var gainers=mktPages.filter(function(p){return p.lp>0&&p.pp>0&&p.pp>p.lp;}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,8);
+  var decliners=mktPages.filter(function(p){return p.lp>0&&p.pp>0&&p.lp>p.pp;}).sort(function(a,b){return(b.lp-b.pp)-(a.lp-a.pp);}).slice(0,8);
+  var opps=mktQueries.filter(function(q){return q.lp>=10&&q.lp<=20&&q.li>=100&&parseFloat(q.lctr)<3;}).sort(function(a,b){return b.li-a.li;}).slice(0,10);
+  var mPgs=mktGA4.filter(function(r){return r.pageType==='bofu'||r.pageType==='casino'||r.pageType==='state'||r.pageType==='Money Page';}).sort(function(a,b){return b.views-a.views;}).slice(0,12);
+  var totV=0,totKE=0,totVP=0,totKEP=0;
+  mPgs.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
   var ga4sec='';
-  if(a&&mPgs.length){ga4sec='GA4 MONEY PAGES:\nTotal views: '+totV+' vs '+totVP+' ('+pct(totV,totVP)+'%)\nTotal exit clicks: '+totKE+' vs '+totKEP+' ('+pct(totKE,totKEP)+'%)\n';ga4sec+=mPgs.map(function(r){var cv=r.views>0?(r.keyEvents/r.views*100).toFixed(1):0;var cvp=(r.viewsPrev||0)>0?((r.keyEventsPrev||0)/(r.viewsPrev)*100).toFixed(1):0;return r.page+'|views:'+(r.viewsPrev||0)+'->'+r.views+'|eng:'+(r.engTime||0).toFixed(0)+'s|exitclicks:'+(r.keyEventsPrev||0)+'->'+r.keyEvents+'|conv:'+cvp+'%->'+cv+'%';}).join('\n');}
-  var prompt='You are an expert SEO analyst for casinos.com. Generate a professional SEO performance report in markdown.\n\nMARKET: '+mktLabel+'\nPERIOD: '+dr+(g&&g.hasComparison?' vs previous period':'')+'\n\nGSC SUMMARY:\nClicks: '+pc.toLocaleString()+'->'+lc.toLocaleString()+' ('+pct(lc,pc)+'%) | Impressions: '+pi.toLocaleString()+'->'+li.toLocaleString()+' ('+pct(li,pi)+'%)\n\nBOFU & STATE PAGES [GSC]:\n'+bofuPgs.map(function(p){return slug(p.key)+'|pos:'+p.pp.toFixed(1)+'->'+p.lp.toFixed(1)+'|clicks:'+p.pc+'->'+p.lc+'|impr:'+p.li+'|type:'+getPageType(p.key);}).join('\n')+'\n\nPOSITION GAINERS: '+gainers.map(function(p){return slug(p.key)+' +'+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\nPOSITION DECLINERS: '+decliners.map(function(p){return slug(p.key)+' '+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\n\nKEYWORD OPPORTUNITIES [GSC] (pos 10-20, 100+ impr, CTR<3%):\n'+opps.map(function(q){return '"'+q.key+'" impr:'+q.li+' pos:'+q.lp.toFixed(1)+' ctr:'+q.lctr;}).join('\n')+(ga4sec?'\n\n'+ga4sec:'')+'\n\nWrite the report with EXACTLY these ## sections:\n## Executive Summary\n## GSC Performance\n## BOFU & State Page Analysis\n## GA4 Engagement & Exit Clicks\n## Keyword Opportunities\n## What Is Working\n## Priority Actions\n(number actions 1-5, be specific with page names and data)';
+  if(a&&mPgs.length){ga4sec='GA4 MONEY PAGES ('+mktLabel+'):\nTotal views: '+totV+' vs '+totVP+' ('+pct(totV,totVP)+'%)\nTotal exit clicks: '+totKE+' vs '+totKEP+' ('+pct(totKE,totKEP)+'%)\n';ga4sec+=mPgs.map(function(r){var cv=r.views>0?(r.keyEvents/r.views*100).toFixed(1):0;var cvp=(r.viewsPrev||0)>0?((r.keyEventsPrev||0)/(r.viewsPrev)*100).toFixed(1):0;return r.page+'|views:'+(r.viewsPrev||0)+'->'+r.views+'|eng:'+(r.engTime||0).toFixed(0)+'s|exitclicks:'+(r.keyEventsPrev||0)+'->'+r.keyEvents+'|conv:'+cvp+'%->'+cv+'%';}).join('\n');}
+  var prompt='You are an expert SEO analyst for casinos.com. Generate a professional SEO performance report in markdown.\n\nMARKET: '+mktLabel+' — all analysis must be specific to this market only.\nPERIOD: '+dr+(g&&g.hasComparison?' vs previous period':'')+'\n\nGSC SUMMARY ('+mktLabel+'):\nClicks: '+pc.toLocaleString()+'->'+lc.toLocaleString()+' ('+pct(lc,pc)+'%) | Impressions: '+pi.toLocaleString()+'->'+li.toLocaleString()+' ('+pct(li,pi)+'%)\n\nBOFU & STATE PAGES [GSC]:\n'+bofuPgs.map(function(p){return slug(p.key)+'|pos:'+p.pp.toFixed(1)+'->'+p.lp.toFixed(1)+'|clicks:'+p.pc+'->'+p.lc+'|impr:'+p.li+'|type:'+getPageType(p.key);}).join('\n')+'\n\nPOSITION GAINERS: '+gainers.map(function(p){return slug(p.key)+' +'+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\nPOSITION DECLINERS: '+decliners.map(function(p){return slug(p.key)+' '+(p.pp-p.lp).toFixed(1)+'pos';}).join(', ')+'\n\nKEYWORD OPPORTUNITIES [GSC] (pos 10-20, 100+ impr, CTR<3%):\n'+opps.map(function(q){return '"'+q.key+'" impr:'+q.li+' pos:'+q.lp.toFixed(1)+' ctr:'+q.lctr;}).join('\n')+(ga4sec?'\n\n'+ga4sec:'')+'\n\nWrite the report with EXACTLY these ## sections:\n## Executive Summary\n## GSC Performance\n## BOFU & State Page Analysis\n## GA4 Engagement & Exit Clicks\n## Keyword Opportunities\n## What Is Working\n## Priority Actions\n(number actions 1-5, be specific with page names and data)';
   fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})})
   .then(function(r){return r.json();})
   .then(function(d){
@@ -885,7 +914,7 @@ function render(){
   if(tbGo)tbGo.onclick=function(){loadLiveData(S.market||'all');};
   var ms=$('mktSelect');
   if(ms)ms.onchange=function(){
-    var newMkt=ms.value;S.market=newMkt;S.ta=null;S.reportMd=null;S.kwActiveUrl=null;
+    var newMkt=ms.value;S.market=newMkt;S.ta=null;S.reportMd=null;S.kwActiveUrl=null;S.ga4SortCol='ke';
     var isLive=S.files.length>0&&S.files[0].type==='LIVE';
     if(isLive&&N8N_WEBHOOK_URL&&N8N_WEBHOOK_URL!=='YOUR_N8N_WEBHOOK_URL_HERE'){
       var dates2=getDates(S.dateRange||'28d');
