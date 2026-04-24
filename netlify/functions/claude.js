@@ -1,27 +1,30 @@
-exports.handler = async (event) => {
+// Netlify serverless function — proxies requests to Anthropic API
+// Keeps the API key server-side so it's never exposed in the browser
+exports.handler = async function(event, context) {
   // Only allow POST
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
+  if(event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  // Check API key is configured
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  if(!ANTHROPIC_API_KEY) {
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ error: 'ANTHROPIC_API_KEY environment variable is not set in Netlify' })
+      body: JSON.stringify({ error: 'ANTHROPIC_API_KEY not set in Netlify environment variables' })
     };
   }
 
   try {
+    const body = JSON.parse(event.body);
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'Content-Type':         'application/json',
+        'x-api-key':            ANTHROPIC_API_KEY,
+        'anthropic-version':    '2023-06-01'
       },
-      body: event.body
+      body: JSON.stringify(body)
     });
 
     const data = await response.json();
@@ -29,15 +32,14 @@ exports.handler = async (event) => {
     return {
       statusCode: response.status,
       headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+        'Content-Type':                 'application/json',
+        'Access-Control-Allow-Origin':  '*'
       },
       body: JSON.stringify(data)
     };
-  } catch (err) {
+  } catch(err) {
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       body: JSON.stringify({ error: err.message })
     };
   }
