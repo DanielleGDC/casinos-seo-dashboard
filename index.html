@@ -93,7 +93,8 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <script>
 var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market:'all',dateRange:'28d',
   customStart:'',customEnd:'',customPrevStart:'',customPrevEnd:'',reportMd:null,
-  kwSearch:'',kwActiveUrl:null,ga4Sort:'ke',ga4SortCol:'ke',compareMode:true};
+  kwSearch:'',kwActiveUrl:null,ga4Sort:'ke',ga4SortCol:'ke',compareMode:true,
+  cwvData:{},cwvRunning:false,cwvStrategy:'mobile'};
 var MARKETS={
   all:   {label:'All markets',       prefix:null},
   gx:    {label:'\uD83C\uDF0D GX / Global',    prefix:null, gx:true},
@@ -742,6 +743,297 @@ function _bindKwEvents(){
     };
   });
 }
+/* ============================================================
+   CORE WEB VITALS TAB
+   ============================================================ */
+var CWV_THRESHOLDS={
+  lcp:  {good:2500, poor:4000,  unit:'ms',  label:'LCP',  name:'Largest Contentful Paint'},
+  cls:  {good:0.1,  poor:0.25,  unit:'',    label:'CLS',  name:'Cumulative Layout Shift'},
+  inp:  {good:200,  poor:500,   unit:'ms',  label:'INP',  name:'Interaction to Next Paint'},
+  fcp:  {good:1800, poor:3000,  unit:'ms',  label:'FCP',  name:'First Contentful Paint'},
+  ttfb: {good:800,  poor:1800,  unit:'ms',  label:'TTFB', name:'Time to First Byte'}
+};
+
+function cwvStatus(metric, val){
+  var t=CWV_THRESHOLDS[metric];
+  if(!t||val==null)return'unknown';
+  return val<=t.good?'good':val<=t.poor?'needs-improvement':'poor';
+}
+
+function cwvColor(status){
+  return status==='good'?'#27AE60':status==='needs-improvement'?'#D4882A':'#E05C3A';
+}
+
+function cwvBadge(metric, val){
+  if(val==null)return'<span style="color:#444;font-size:10px">\u2014</span>';
+  var t=CWV_THRESHOLDS[metric];
+  var status=cwvStatus(metric,val);
+  var col=cwvColor(status);
+  var display=t.unit==='ms'?(val>=1000?(val/1000).toFixed(1)+'s':Math.round(val)+'ms'):val.toFixed(3);
+  return'<span style="color:'+col+';font-weight:700;font-size:11px">'+display+'</span>';
+}
+
+function cwvScoreBadge(score){
+  if(score==null)return'<span style="color:#444">\u2014</span>';
+  var pct=Math.round(score*100);
+  var col=pct>=90?'#27AE60':pct>=50?'#D4882A':'#E05C3A';
+  return'<span style="background:'+col+';color:#fff;border-radius:50%;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">'+pct+'</span>';
+}
+
+function tabCWV(){
+  var g=S.gsc,a=S.ga4;
+  var mktKey=S.market||'all';
+
+  // Get top BOFU/state/casino pages for this market
+  var candidates=[];
+  if(g){
+    candidates=g.pages.filter(function(p){
+      if(!matchMarket(p.key,mktKey))return false;
+      var t=getPageType(p.key);
+      return t==='bofu'||t==='state'||t==='casino';
+    }).sort(function(a,b){return b.lc-a.lc;}).slice(0,20);
+  }
+
+  var checked=Object.keys(S.cwvData).length;
+  var html='';
+
+  // Header + controls
+  html+='<div style="background:var(--bg2);border:1px solid #222;border-radius:11px;padding:14px 16px;margin-bottom:14px">';
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">';
+  html+='<div>';
+  html+='<div style="font-size:13px;font-weight:700;color:#F0F0F0;margin-bottom:3px">\u26a1 Core Web Vitals</div>';
+  html+='<div style="font-size:11px;color:#555">Live data from Google PageSpeed Insights \u00b7 No API key needed</div>';
+  html+='</div>';
+  html+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+  // Strategy toggle
+  html+='<div style="display:flex;background:var(--bg3);border:1px solid #333;border-radius:7px;overflow:hidden">';
+  html+='<button onclick="S.cwvStrategy=\'mobile\';tabCWV()" style="border:none;border-radius:0;padding:5px 12px;font-size:11px;background:'+(S.cwvStrategy==='mobile'?'#E91E8C':'transparent')+';color:'+(S.cwvStrategy==='mobile'?'#fff':'#888')+'">\uD83D\uDCF1 Mobile</button>';
+  html+='<button onclick="S.cwvStrategy=\'desktop\';tabCWV()" style="border:none;border-radius:0;padding:5px 12px;font-size:11px;background:'+(S.cwvStrategy==='desktop'?'#E91E8C':'transparent')+';color:'+(S.cwvStrategy==='desktop'?'#fff':'#888')+'">\uD83D\uDDA5 Desktop</button>';
+  html+='</div>';
+  if(!S.cwvRunning){
+    html+='<button id="cwvRunBtn" onclick="runCWV()" style="background:var(--pink);color:#fff;border:none;border-radius:7px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer">'+(checked>0?'\u27f3 Re-check pages':'\u25b6 Check top pages')+'</button>';
+  } else {
+    html+='<button disabled style="background:#333;color:#666;border:none;border-radius:7px;padding:7px 16px;font-size:12px">Checking\u2026</button>';
+  }
+  html+='</div></div>';
+
+  // Custom URL checker
+  html+='<div style="margin-top:12px;display:flex;gap:8px;align-items:center">';
+  html+='<input id="cwvCustomUrl" type="text" placeholder="Check any URL e.g. /us/bonus/200-no-deposit-bonus-200-free-spins" style="flex:1;height:30px;font-size:11px">';
+  html+='<button onclick="runCWVSingle()" style="height:30px;padding:0 14px;font-size:11px;border-radius:6px;border:1px solid #444;color:#aaa;background:var(--bg3);cursor:pointer">Check URL</button>';
+  html+='</div>';
+
+  html+='<div id="cwvProgress" style="font-size:10px;color:#555;margin-top:8px;min-height:14px"></div>';
+  html+='</div>';
+
+  // Legend
+  html+='<div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">';
+  [['good','Good'],['needs-improvement','Needs improvement'],['poor','Poor'],['unknown','No field data']].forEach(function(s){
+    var col=s[0]==='unknown'?'#444':cwvColor(s[0]);
+    html+='<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:#888"><div style="width:10px;height:10px;border-radius:50%;background:'+col+'"></div>'+s[1]+'</div>';
+  });
+  html+='</div>';
+
+  // Summary stats if data exists
+  if(checked>0){
+    var goodLCP=0,goodCLS=0,goodINP=0,total=0;
+    Object.values(S.cwvData).forEach(function(d){
+      if(!d||d.error)return;
+      total++;
+      if(cwvStatus('lcp',d.lcp)==='good')goodLCP++;
+      if(cwvStatus('cls',d.cls)==='good')goodCLS++;
+      if(cwvStatus('inp',d.inp)==='good')goodINP++;
+    });
+    if(total>0){
+      html+='<div class="g4" style="margin-bottom:14px">';
+      html+=mkMC('Pages Checked',String(total),'of '+candidates.length+' candidates','#888');
+      html+=mkMC('LCP Good',Math.round(goodLCP/total*100)+'%',goodLCP+' of '+total+' pages',goodLCP/total>=0.75?'#27AE60':'#E05C3A');
+      html+=mkMC('CLS Good',Math.round(goodCLS/total*100)+'%',goodCLS+' of '+total+' pages',goodCLS/total>=0.75?'#27AE60':'#E05C3A');
+      html+=mkMC('INP Good',Math.round(goodINP/total*100)+'%',goodINP+' of '+total+' pages',goodINP/total>=0.75?'#27AE60':'#E05C3A');
+      html+='</div>';
+    }
+  }
+
+  // Results table
+  var rows=Object.entries(S.cwvData);
+  if(rows.length){
+    html+='<div class="tbl"><table><thead><tr>'
+      +'<th>Page</th>'
+      +'<th>Type</th>'
+      +'<th class="r">Score</th>'
+      +'<th class="r" title="'+CWV_THRESHOLDS.lcp.name+'">LCP</th>'
+      +'<th class="r" title="'+CWV_THRESHOLDS.cls.name+'">CLS</th>'
+      +'<th class="r" title="'+CWV_THRESHOLDS.inp.name+'">INP</th>'
+      +'<th class="r" title="'+CWV_THRESHOLDS.fcp.name+'">FCP</th>'
+      +'<th class="r" title="'+CWV_THRESHOLDS.ttfb.name+'">TTFB</th>'
+      +'<th class="r">GSC Clicks</th>'
+      +'</tr></thead><tbody>';
+
+    // Sort by performance score ascending (worst first)
+    rows.sort(function(a,b){
+      var sa=a[1]&&a[1].score!=null?a[1].score:1;
+      var sb=b[1]&&b[1].score!=null?b[1].score:1;
+      return sa-sb;
+    });
+
+    rows.forEach(function(entry){
+      var url=entry[0],d=entry[1];
+      var pageDisplay=url.replace('https://www.casinos.com','');
+      var pt=getPageType(url);
+      var gscPage=g?g.pages.find(function(p){return p.key===url||p.key.replace(/\/$/,'')===url.replace(/\/$/,'')}):null;
+      var clicks=gscPage?gscPage.lc:0;
+
+      if(d&&d.error){
+        html+='<tr><td style="font-family:monospace;font-size:10px;color:#aaa" title="'+esc(pageDisplay)+'">'+esc(pageDisplay.length>55?pageDisplay.slice(0,53)+'\u2026':pageDisplay)+'</td><td>'+ptBadge(pt)+'</td><td colspan="7" style="color:#E05C3A;font-size:10px">'+esc(d.error)+'</td></tr>';
+        return;
+      }
+      if(d&&d.loading){
+        html+='<tr><td style="font-family:monospace;font-size:10px;color:#aaa">'+esc(pageDisplay.length>55?pageDisplay.slice(0,53)+'\u2026':pageDisplay)+'</td><td>'+ptBadge(pt)+'</td><td colspan="7" style="color:#555;font-size:10px">Checking\u2026</td></tr>';
+        return;
+      }
+
+      html+='<tr>'
+        +'<td class="url-cell" style="font-family:monospace;font-size:10px;color:#aaa" title="'+esc(pageDisplay)+'">'+esc(pageDisplay.length>55?pageDisplay.slice(0,53)+'\u2026':pageDisplay)+'</td>'
+        +'<td>'+ptBadge(pt)+'</td>'
+        +'<td class="r">'+cwvScoreBadge(d?d.score:null)+'</td>'
+        +'<td class="r">'+cwvBadge('lcp',d?d.lcp:null)+'</td>'
+        +'<td class="r">'+cwvBadge('cls',d?d.cls:null)+'</td>'
+        +'<td class="r">'+cwvBadge('inp',d?d.inp:null)+'</td>'
+        +'<td class="r">'+cwvBadge('fcp',d?d.fcp:null)+'</td>'
+        +'<td class="r">'+cwvBadge('ttfb',d?d.ttfb:null)+'</td>'
+        +'<td class="r" style="color:#888">'+fmt(clicks)+'</td>'
+        +'</tr>';
+    });
+    html+='</tbody></table></div>';
+
+    // Threshold reference
+    html+='<div style="margin-top:10px;background:var(--bg3);border-radius:8px;padding:10px 14px;font-size:10px;color:#555">';
+    html+='<span style="color:#888;font-weight:700">Thresholds: </span>';
+    html+=Object.entries(CWV_THRESHOLDS).map(function(e){
+      var k=e[0],t=e[1];
+      var g2=t.unit==='ms'?(t.good>=1000?t.good/1000+'s':t.good+'ms'):t.good;
+      var p2=t.unit==='ms'?(t.poor>=1000?t.poor/1000+'s':t.poor+'ms'):t.poor;
+      return'<span style="margin-right:14px"><strong style="color:#aaa">'+t.label+'</strong> \u2264'+g2+' good, >'+p2+' poor</span>';
+    }).join('');
+    html+='</div>';
+
+  } else if(!S.cwvRunning){
+    // Empty state
+    html+='<div style="background:var(--bg2);border:1px solid #222;border-radius:11px;padding:40px 20px;text-align:center">';
+    html+='<div style="font-size:36px;margin-bottom:10px">\u26a1</div>';
+    html+='<div style="font-size:13px;color:#888;margin-bottom:6px">No CWV data yet</div>';
+    html+='<div style="font-size:11px;color:#555;line-height:1.7;margin-bottom:16px">Click <strong style="color:#F0F0F0">Check top pages</strong> to run PageSpeed Insights on your top BOFU and state pages.<br>Results show live field data from real users via Chrome UX Report.</div>';
+    html+='<div style="font-size:10px;color:#444">Checks '+candidates.length+' pages \u00b7 ~'+(candidates.length*3)+'-'+(candidates.length*5)+'s \u00b7 Free \u00b7 No API key needed</div>';
+    html+='</div>';
+  }
+
+  $('tc').innerHTML=html;
+}
+
+window.runCWV=function(){
+  var g=S.gsc,mktKey=S.market||'all';
+  if(!g)return;
+
+  S.cwvRunning=true;
+  S.cwvData={};
+  tabCWV();
+
+  var candidates=g.pages.filter(function(p){
+    if(!matchMarket(p.key,mktKey))return false;
+    var t=getPageType(p.key);
+    return t==='bofu'||t==='state'||t==='casino';
+  }).sort(function(a,b){return b.lc-a.lc;}).slice(0,15);
+
+  var urls=candidates.map(function(p){
+    var url=p.key;
+    if(!url.startsWith('http'))url='https://www.casinos.com'+url;
+    return url;
+  });
+
+  _checkCWVQueue(urls,0);
+};
+
+window.runCWVSingle=function(){
+  var inp=$('cwvCustomUrl');
+  if(!inp||!inp.value.trim())return;
+  var url=inp.value.trim();
+  if(!url.startsWith('http'))url='https://www.casinos.com'+url;
+  S.cwvRunning=true;
+  S.cwvData[url]={loading:true};
+  tabCWV();
+  _fetchCWV(url,function(){
+    S.cwvRunning=false;
+    tabCWV();
+  });
+};
+
+function _checkCWVQueue(urls,idx){
+  if(idx>=urls.length){
+    S.cwvRunning=false;
+    tabCWV();
+    return;
+  }
+  var url=urls[idx];
+  var prog=$('cwvProgress');
+  if(prog)prog.textContent='Checking '+(idx+1)+' of '+urls.length+': '+url.replace('https://www.casinos.com','');
+  S.cwvData[url]={loading:true};
+
+  _fetchCWV(url,function(){
+    tabCWV();
+    // Small delay to avoid rate limiting
+    setTimeout(function(){_checkCWVQueue(urls,idx+1);},800);
+  });
+}
+
+function _fetchCWV(url,cb){
+  var apiUrl='https://www.googleapis.com/pagespeedonline/v5/runPagespeed'
+    +'?url='+encodeURIComponent(url)
+    +'&strategy='+S.cwvStrategy
+    +'&category=performance';
+
+  fetch(apiUrl)
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var result={};
+
+    // Field data (CrUX - real user data) — preferred
+    var lx=d.loadingExperience;
+    if(lx&&lx.metrics){
+      var m=lx.metrics;
+      if(m.LARGEST_CONTENTFUL_PAINT_MS)result.lcp=m.LARGEST_CONTENTFUL_PAINT_MS.percentile;
+      if(m.CUMULATIVE_LAYOUT_SHIFT_SCORE)result.cls=m.CUMULATIVE_LAYOUT_SHIFT_SCORE.percentile/100;
+      if(m.INTERACTION_TO_NEXT_PAINT)result.inp=m.INTERACTION_TO_NEXT_PAINT.percentile;
+      if(m.FIRST_CONTENTFUL_PAINT_MS)result.fcp=m.FIRST_CONTENTFUL_PAINT_MS.percentile;
+      if(m.EXPERIMENTAL_TIME_TO_FIRST_BYTE)result.ttfb=m.EXPERIMENTAL_TIME_TO_FIRST_BYTE.percentile;
+      result.hasFieldData=true;
+    }
+
+    // Lab data (Lighthouse) — fallback if no field data
+    var lr=d.lighthouseResult;
+    if(lr){
+      result.score=lr.categories&&lr.categories.performance?lr.categories.performance.score:null;
+      var audits=lr.audits||{};
+      if(!result.lcp&&audits['largest-contentful-paint'])result.lcp=audits['largest-contentful-paint'].numericValue;
+      if(!result.cls&&audits['cumulative-layout-shift'])result.cls=audits['cumulative-layout-shift'].numericValue;
+      if(!result.inp&&audits['interactive'])result.inp=audits['interactive'].numericValue;
+      if(!result.fcp&&audits['first-contentful-paint'])result.fcp=audits['first-contentful-paint'].numericValue;
+      if(!result.ttfb&&audits['server-response-time'])result.ttfb=audits['server-response-time'].numericValue;
+      result.hasFieldData=result.hasFieldData||false;
+    }
+
+    if(!result.score&&!result.lcp){
+      result={error:'No data available'};
+    }
+
+    S.cwvData[url]=result;
+    cb();
+  })
+  .catch(function(e){
+    S.cwvData[url]={error:e.message||'Request failed'};
+    cb();
+  });
+}
+
 /* AI TAKEAWAYS */
 function tabTakeaways(){
   if(!S.gsc&&!S.ga4){$('tc').innerHTML='<div class="empty">Upload data first</div>';return;}
@@ -889,7 +1181,7 @@ function renderUpload(){
 /* MAIN RENDER */
 function render(){
   if(!S.gsc&&!S.ga4){renderUpload();return;}
-  var TABS=[{id:'overview',l:'Overview'},{id:'positions',l:'Positions'},{id:'ga4',l:'GA4'},{id:'keywords',l:'Keywords'},{id:'takeaways',l:'AI Takeaways'}];
+  var TABS=[{id:'overview',l:'Overview'},{id:'positions',l:'Positions'},{id:'ga4',l:'GA4'},{id:'keywords',l:'Keywords'},{id:'cwv',l:'\u26a1 Core Web Vitals'},{id:'takeaways',l:'AI Takeaways'}];
   var STAR2='<svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg>';
   ROOT.innerHTML='<div class="topbar"><div class="lm">'+STAR2+'</div><div><div class="ln">casinos.com</div><span class="ls">SEO Dashboard <span style="font-size:9px;color:#444;font-weight:400">v2.3</span></span></div>'+((S.gsc||S.ga4)?'<div class="dp"><span class="dd"></span>'+esc(dateBadge())+'</div>':'')+(S.gsc&&S.gsc.hasComparison?'<span class="cmp-pill">GSC cmp</span>':'')+(S.ga4&&S.ga4.hasComparison?'<span class="cmp-pill">GA4 cmp</span>':'')+'<div style="flex:1"></div>'
     +(S.gsc||S.ga4?'<button id="cmpToggle" onclick="S.compareMode=!S.compareMode;render()" style="font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid '+(S.compareMode?'rgba(233,30,140,.5)':'#333')+';background:'+(S.compareMode?'rgba(233,30,140,.12)':'transparent')+';color:'+(S.compareMode?'#E91E8C':'#555')+';margin-right:2px" title="Toggle comparison period">'+(S.compareMode?'\u29cb Compare ON':'\u25a1 Compare OFF')+'</button>':'')
@@ -924,7 +1216,7 @@ function render(){
   };
   doTab();
 }
-function doTab(){if(S.tab==='overview')tabOverview();else if(S.tab==='positions')tabPositions();else if(S.tab==='ga4')tabGA4();else if(S.tab==='keywords')tabKeywords();else if(S.tab==='takeaways')tabTakeaways();}
+function doTab(){if(S.tab==='overview')tabOverview();else if(S.tab==='positions')tabPositions();else if(S.tab==='ga4')tabGA4();else if(S.tab==='keywords')tabKeywords();else if(S.tab==='cwv')tabCWV();else if(S.tab==='takeaways')tabTakeaways();}
 /* PDF EXPORT */
 async function downloadPDF(){
   var btn=$('pdfBtn');if(btn){btn.textContent='Building PDF...';btn.disabled=true;}
