@@ -1084,8 +1084,8 @@ function csvBtn(tableId,filename,label){
     +'<svg viewBox="0 0 16 16" style="width:11px;height:11px;fill:currentColor"><path d="M8 11L4 7h2.5V3h3v4H12L8 11zm-5 3h10v1.5H3V14z"/></svg>'
     +(label||'Export CSV')+'</button>';
 }
-   ============================================================ */
-var CWV_THRESHOLDS={
+/* ============================================================
+   CORE WEB VITALS TAB
   lcp:  {good:2500, poor:4000,  unit:'ms',  label:'LCP',  name:'Largest Contentful Paint'},
   cls:  {good:0.1,  poor:0.25,  unit:'',    label:'CLS',  name:'Cumulative Layout Shift'},
   inp:  {good:200,  poor:500,   unit:'ms',  label:'INP',  name:'Interaction to Next Paint'},
@@ -1178,7 +1178,7 @@ function tabCWV(){
   html+='</select>';
   html+='<span style="font-size:10px;color:#444;margin-left:4px">Checking top '
     +'<select onchange="S.cwvLimit=+this.value;S.cwvData={};tabCWV()" style="height:22px;font-size:10px;border:1px solid #333;border-radius:4px;background:var(--bg3);color:#aaa;padding:0 4px">'
-    +[10,15,20,30].map(function(n){return'<option value="'+n+'"'+(( S.cwvLimit||20)===n?' selected':'')+'>'+n+'</option>';}).join('')
+    +[10,15,20,30].map(function(n){var lim=S.cwvLimit||20;return'<option value="'+n+'"'+(lim===n?' selected':'')+'>'+n+'</option>';}).join('')
     +'</select>'
     +' pages for '+esc(mktLabel)+'</span>';
   html+='</div>';
