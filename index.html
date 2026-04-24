@@ -93,7 +93,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <script>
 var S={tab:'overview',gsc:null,ga4:null,files:[],kw:'top',ta:null,db:null,market:'all',dateRange:'28d',
   customStart:'',customEnd:'',customPrevStart:'',customPrevEnd:'',reportMd:null,
-  kwSearch:'',kwActiveUrl:null,aeoReport:null};
+  kwSearch:'',kwActiveUrl:null};
 var MARKETS={
   all:   {label:'All markets',       prefix:null},
   gx:    {label:'\uD83C\uDF0D GX / Global',    prefix:null, gx:true},
@@ -737,210 +737,6 @@ function _bindKwEvents(){
     };
   });
 }
-/* ============================================================
-   AEO / GEO TAB
-   AI Overview correlation + Claude recommendations
-   ============================================================ */
-function tabAEO(){
-  var g=S.gsc,a=S.ga4;
-  if(!g){$('tc').innerHTML='<div class="empty">Load live data or upload a GSC zip to use AEO / GEO analysis</div>';return;}
-
-  var aioRows=g.aioRows||[];
-  var aioQuerySet=new Set((g.aioQueries||[]).map(function(q){return q.toLowerCase();}));
-  var aioPageSet=new Set(g.aioPages||[]);
-  var mktKey=S.market||'all';
-  var dr=g.ds?drange(g.ds,g.de):g.dateRange;
-
-  // Filter AIO rows by market
-  var filteredAio=aioRows.filter(function(r){
-    if(mktKey==='all')return true;
-    return matchMarket(r.page,mktKey);
-  });
-
-  // Identify cannibalized queries: in AIO + page 1-5 + CTR < 3%
-  var allQs=(g.queries||[]).filter(function(q){
-    if(mktKey==='all')return true;
-    return matchMarket(q.page,mktKey);
-  });
-  var cannibalized=allQs.filter(function(q){
-    return aioQuerySet.has(q.key.toLowerCase())&&q.lp>=1&&q.lp<=5&&parseFloat(q.lctr)<3;
-  }).sort(function(a,b){return b.li-a.li;}).slice(0,20);
-
-  // Pages with AIO presence
-  var aioPages=filteredAio.reduce(function(acc,r){
-    if(!acc[r.page])acc[r.page]={page:r.page,impressions:0,clicks:0,queries:0};
-    acc[r.page].impressions+=r.impressions;
-    acc[r.page].clicks+=r.clicks;
-    acc[r.page].queries++;
-    return acc;
-  },{});
-  var aioPageArr=Object.values(aioPages).sort(function(a,b){return b.impressions-a.impressions;}).slice(0,20);
-
-  // Estimate lost clicks from cannibalization
-  var estLostClicks=cannibalized.reduce(function(sum,q){
-    var expectedCTR=q.lp<=3?0.15:0.08;
-    return sum+Math.round(q.li*expectedCTR)-q.lc;
-  },0);
-
-  var html='';
-
-  // Summary cards
-  html+='<div class="g4" style="margin-bottom:14px">'
-    +mkMC('\uD83E\uDD16 AI Overview Queries',String(aioQuerySet.size),'Queries triggering AIO','#9B59B6',dr)
-    +mkMC('Pages in AI Overviews',String(aioPageSet.size),'Unique pages cited','#9B59B6')
-    +mkMC('Cannibalized Queries',String(cannibalized.length),'Pg 1-5, AIO present, CTR <3%',cannibalized.length>0?'#E05C3A':'#27AE60')
-    +mkMC('Est. Lost Clicks',estLostClicks>0?'~'+fmt(estLostClicks):'\u2014','Due to AIO cannibalization',estLostClicks>0?'#E05C3A':'#555')
-    +'</div>';
-
-  // Cannibalized queries section
-  if(cannibalized.length){
-    html+='<div class="card"><div class="sec">\u26a0\ufe0f Cannibalized queries \u2014 page 1-5, AI Overview present, CTR under 3%</div>';
-    html+='<div class="tbl"><table><thead><tr>'
-      +'<th>Query</th><th>URL</th>'
-      +'<th class="r">Impr.</th><th class="r">Clicks</th>'
-      +'<th class="r">CTR</th><th class="r">Pos.</th>'
-      +'<th class="r">Est. lost clicks</th>'
-      +'</tr></thead><tbody>';
-    cannibalized.forEach(function(q,i){
-      var expectedCTR=q.lp<=3?0.15:0.08;
-      var lost=Math.round(q.li*expectedCTR)-q.lc;
-      var pageDisplay=(q.page||'').replace(/^https?:\/\/[^/]+/,'');
-      html+='<tr>'
-        +'<td style="font-family:monospace;font-size:10px" title="'+esc(q.key)+'">'+esc(q.key.length>45?q.key.slice(0,43)+'\u2026':q.key)+'</td>'
-        +'<td style="font-family:monospace;font-size:10px;color:#888" title="'+esc(pageDisplay)+'">'+esc(pageDisplay.length>38?pageDisplay.slice(0,36)+'\u2026':pageDisplay)+'</td>'
-        +'<td class="r" style="color:#888">'+q.li.toLocaleString()+'</td>'
-        +'<td class="r">'+q.lc+'</td>'
-        +'<td class="r" style="color:#E05C3A;font-weight:700">'+esc(q.lctr)+'</td>'
-        +'<td class="r" style="color:#E91E8C">'+q.lp.toFixed(1)+'</td>'
-        +'<td class="r" style="color:#E05C3A;font-weight:700">'+(lost>0?'-'+lost:'\u2014')+'</td>'
-        +'</tr>';
-    });
-    html+='</tbody></table></div></div>';
-  }
-
-  // Pages cited in AI Overviews
-  if(aioPageArr.length){
-    html+='<div class="card"><div class="sec">\u2705 Pages appearing in AI Overviews</div>';
-    html+='<div class="tbl"><table><thead><tr>'
-      +'<th>Page</th><th class="r">AIO Impressions</th>'
-      +'<th class="r">AIO Clicks</th><th class="r">Queries in AIO</th>'
-      +'</tr></thead><tbody>';
-    aioPageArr.forEach(function(p){
-      var pageDisplay=p.page.replace(/^https?:\/\/[^/]+/,'');
-      html+='<tr>'
-        +'<td style="font-family:monospace;font-size:10px;color:#9B59B6" title="'+esc(p.page)+'">'+esc(pageDisplay)+'</td>'
-        +'<td class="r">'+p.impressions.toLocaleString()+'</td>'
-        +'<td class="r">'+p.clicks+'</td>'
-        +'<td class="r">'+p.queries+'</td>'
-        +'</tr>';
-    });
-    html+='</tbody></table></div></div>';
-  }
-
-  if(!filteredAio.length&&!cannibalized.length){
-    html+='<div class="card" style="text-align:center;padding:30px">'
-      +'<div style="font-size:32px;margin-bottom:10px">\uD83E\uDD16</div>'
-      +'<div style="font-size:13px;color:#888;margin-bottom:6px">No AI Overview data yet</div>'
-      +'<div style="font-size:11px;color:#555;line-height:1.7">AI Overview data requires the new n8n workflow with the GSC AI Overview node.<br>Once deployed, this tab will show which queries and pages appear in Google AI Overviews.</div>'
-      +'</div>';
-  }
-
-  // Claude AEO/GEO analysis button
-  html+='<div class="card" style="text-align:center;padding:20px">'
-    +'<div style="font-size:12px;color:#888;margin-bottom:12px">Get AI-powered AEO &amp; GEO recommendations based on your data</div>'
-    +'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
-    +'<button class="bp" id="aeoBtn" onclick="runAEO()" style="font-size:13px">\uD83E\uDD16 Generate AEO / GEO recommendations</button>'
-    +'</div>'
-    +'<div id="aeoStatus" style="font-size:11px;color:#555;margin-top:10px;min-height:18px"></div>'
-    +'</div>';
-
-  if(S.aeoReport){
-    html+=_renderAEOReport(S.aeoReport);
-  }
-
-  $('tc').innerHTML=html;
-}
-
-window.runAEO=function(){
-  var btn=$('aeoBtn'),status=$('aeoStatus');
-  if(btn){btn.disabled=true;btn.textContent='Analysing\u2026';}
-  if(status)status.textContent='Claude is analysing your AEO/GEO data\u2026';
-
-  var g=S.gsc,a=S.ga4,mktKey=S.market||'all';
-  var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
-  var dr=g?(g.ds?drange(g.ds,g.de):g.dateRange):'';
-
-  var aioRows=g?(g.aioRows||[]):[];
-  var aioQuerySet=new Set((g?(g.aioQueries||[]):[]).map(function(q){return q.toLowerCase();}));
-  var allQs=(g?g.queries||[]:[]).filter(function(q){
-    if(mktKey==='all')return true;
-    return matchMarket(q.page,mktKey);
-  });
-
-  // Top queries by impressions
-  var topQs=allQs.slice().sort(function(a,b){return b.li-a.li;}).slice(0,20);
-  // Cannibalized
-  var cannibal=allQs.filter(function(q){return aioQuerySet.has(q.key.toLowerCase())&&q.lp<=5&&parseFloat(q.lctr)<3;}).slice(0,10);
-  // High potential — good position, good impressions, NOT in AIO yet
-  var notInAIO=allQs.filter(function(q){return !aioQuerySet.has(q.key.toLowerCase())&&q.lp<=5&&q.li>200;}).sort(function(a,b){return b.li-a.li;}).slice(0,10);
-  // Top GA4 money pages
-  var moneyPgs=a?a.rows.filter(function(r){return r.pageType==='bofu'||r.pageType==='casino'||r.pageType==='state';}).sort(function(a,b){return b.views-a.views;}).slice(0,10):[];
-
-  var prompt='You are an expert in AEO (Answer Engine Optimization) and GEO (Generative Engine Optimization) for casinos.com — a major online casino comparison site.\n\n'
-    +'MARKET: '+mktLabel+'\nPERIOD: '+dr+'\n\n'
-    +'QUERIES IN AI OVERVIEWS ('+aioQuerySet.size+' total):\n'
-    +Array.from(aioQuerySet).slice(0,15).join(', ')+'\n\n'
-    +'CANNIBALIZED QUERIES (page 1-5, AIO present, CTR <3%):\n'
-    +cannibal.map(function(q){return '"'+q.key+'" pos:'+q.lp.toFixed(1)+' impr:'+q.li+' CTR:'+q.lctr;}).join('\n')+'\n\n'
-    +'HIGH-VALUE QUERIES NOT YET IN AI OVERVIEWS (opportunity):\n'
-    +notInAIO.map(function(q){return '"'+q.key+'" pos:'+q.lp.toFixed(1)+' impr:'+q.li+' clicks:'+q.lc;}).join('\n')+'\n\n'
-    +'TOP QUERIES BY IMPRESSIONS:\n'
-    +topQs.map(function(q){return '"'+q.key+'" impr:'+q.li+' clicks:'+q.lc+' pos:'+q.lp.toFixed(1)+' CTR:'+q.lctr;}).join('\n')+'\n\n'
-    +(moneyPgs.length?'TOP MONEY PAGES [GA4]:\n'+moneyPgs.map(function(r){return r.page+' views:'+r.views+' exitclicks:'+r.keyEvents+' conv:'+(r.views>0?(r.keyEvents/r.views*100).toFixed(1):0)+'%';}).join('\n')+'\n\n':''  )
-    +'Reply with EXACTLY these sections:\n'
-    +'## AEO Summary\n[2-3 sentences on current AI Overview presence and risk level]\n\n'
-    +'## AI Overview Cannibalization\n- [specific query: what to do about it]\n\n'
-    +'## GEO Opportunities\n- [specific page/topic: how to get cited in AI responses]\n\n'
-    +'## Content Recommendations\n- [specific page: exact content change to improve AI citability]\n\n'
-    +'## Entity & Topic Gaps\n- [topic or entity casinos.com should establish authority on]\n\n'
-    +'## Priority Actions\n1. [action]\n2. [action]\n3. [action]\n4. [action]\n5. [action]';
-
-  fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:prompt}]})})
-  .then(function(r){return r.json();})
-  .then(function(d){
-    S.aeoReport=d.content&&d.content.length>0?d.content.map(function(c){return c.text||'';}).join(''):(d.error?'Error: '+JSON.stringify(d.error):'No response');
-    if(btn){btn.disabled=false;btn.textContent='\uD83E\uDD16 Generate AEO / GEO recommendations';}
-    if(status)status.textContent='';
-    tabAEO();
-  })
-  .catch(function(e){
-    if(btn){btn.disabled=false;btn.textContent='\uD83E\uDD16 Generate AEO / GEO recommendations';}
-    if(status)status.innerHTML='<span style="color:#E05C3A">Error: '+esc(e.message)+'</span>';
-  });
-};
-
-function _renderAEOReport(text){
-  var ST={
-    'AEO Summary':              {bg:'rgba(155,89,182,.07)',bc:'#9B59B6',tc:'#C39BD3'},
-    'AI Overview Cannibalization':{bg:'rgba(224,92,58,.07)',bc:'#E05C3A',tc:'#E8896A'},
-    'GEO Opportunities':        {bg:'rgba(233,30,140,.07)',bc:'#E91E8C',tc:'#F48FB1'},
-    'Content Recommendations':  {bg:'rgba(39,174,96,.07)', bc:'#27AE60',tc:'#2ECC71'},
-    'Entity & Topic Gaps':      {bg:'rgba(212,136,42,.07)',bc:'#D4882A',tc:'#F0A93C'},
-    'Priority Actions':         {bg:'rgba(255,255,255,.04)',bc:'#555',  tc:'#ccc'}
-  };
-  var secs=text.split(/^## /m).filter(Boolean);
-  var html='<div style="margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
-    +'<div style="font-size:10px;color:#555">AEO / GEO Analysis — powered by Claude</div>'
-    +'<button onclick="S.aeoReport=null;tabAEO()" style="font-size:11px;padding:4px 10px">Regenerate</button>'
-    +'</div>';
-  secs.forEach(function(sec){
-    var parts=sec.split('\n'),title=parts[0].trim(),body=parts.slice(1).join('\n').trim();
-    var st=ST[title]||{bg:'rgba(255,255,255,.03)',bc:'#333',tc:'#888'};
-    html+='<div class="tab-box" style="background:'+st.bg+';border-left-color:'+st.bc+';margin-bottom:8px"><div class="tab-h" style="color:'+st.bc+'">'+esc(title)+'</div><div class="tab-b" style="color:'+st.tc+'">'+esc(body)+'</div></div>';
-  });
-  return html+'</div>';
-}
-
 /* AI TAKEAWAYS */
 function tabTakeaways(){
   if(!S.gsc&&!S.ga4){$('tc').innerHTML='<div class="empty">Upload data first</div>';return;}
@@ -1058,7 +854,7 @@ function renderUpload(){
 /* MAIN RENDER */
 function render(){
   if(!S.gsc&&!S.ga4){renderUpload();return;}
-  var TABS=[{id:'overview',l:'Overview'},{id:'positions',l:'Positions'},{id:'ga4',l:'GA4'},{id:'keywords',l:'Keywords'},{id:'aeo',l:'\uD83E\uDD16 AEO / GEO'},{id:'takeaways',l:'AI Takeaways'}];
+  var TABS=[{id:'overview',l:'Overview'},{id:'positions',l:'Positions'},{id:'ga4',l:'GA4'},{id:'keywords',l:'Keywords'},{id:'takeaways',l:'AI Takeaways'}];
   var STAR2='<svg viewBox="0 0 36 36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18 2C18 2 20 13 26 18C20 23 18 34 18 34C18 34 16 23 10 18C16 13 18 2 18 2ZM2 18C2 18 13 16 18 10C23 16 34 18 34 18C34 18 23 20 18 26C13 20 2 18 2 18Z"/></svg>';
   ROOT.innerHTML='<div class="topbar"><div class="lm">'+STAR2+'</div><div><div class="ln">casinos.com</div><span class="ls">SEO Dashboard <span style="font-size:9px;color:#444;font-weight:400">v2.3</span></span></div>'+((S.gsc||S.ga4)?'<div class="dp"><span class="dd"></span>'+esc(dateBadge())+'</div>':'')+(S.gsc&&S.gsc.hasComparison?'<span class="cmp-pill">GSC cmp</span>':'')+(S.ga4&&S.ga4.hasComparison?'<span class="cmp-pill">GA4 cmp</span>':'')+'<div style="flex:1"></div>'
     +(S.gsc||S.ga4?'<button class="pdf-btn" id="pdfBtn" onclick="downloadPDF()"><svg viewBox="0 0 16 16" style="width:13px;height:13px;fill:currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zm-5 2h10v1.5H3V14z"/></svg>PDF</button>':'')
@@ -1082,7 +878,7 @@ function render(){
   if(tbGo)tbGo.onclick=function(){loadLiveData(S.market||'all');};
   var ms=$('mktSelect');
   if(ms)ms.onchange=function(){
-    var newMkt=ms.value;S.market=newMkt;S.ta=null;S.reportMd=null;S.kwActiveUrl=null;S.aeoReport=null;
+    var newMkt=ms.value;S.market=newMkt;S.ta=null;S.reportMd=null;S.kwActiveUrl=null;
     var isLive=S.files.length>0&&S.files[0].type==='LIVE';
     if(isLive&&N8N_WEBHOOK_URL&&N8N_WEBHOOK_URL!=='YOUR_N8N_WEBHOOK_URL_HERE'){
       var dates2=getDates(S.dateRange||'28d');
@@ -1092,7 +888,7 @@ function render(){
   };
   doTab();
 }
-function doTab(){if(S.tab==='overview')tabOverview();else if(S.tab==='positions')tabPositions();else if(S.tab==='ga4')tabGA4();else if(S.tab==='keywords')tabKeywords();else if(S.tab==='aeo')tabAEO();else if(S.tab==='takeaways')tabTakeaways();}
+function doTab(){if(S.tab==='overview')tabOverview();else if(S.tab==='positions')tabPositions();else if(S.tab==='ga4')tabGA4();else if(S.tab==='keywords')tabKeywords();else if(S.tab==='takeaways')tabTakeaways();}
 /* PDF EXPORT */
 async function downloadPDF(){
   var btn=$('pdfBtn');if(btn){btn.textContent='Building PDF...';btn.disabled=true;}
