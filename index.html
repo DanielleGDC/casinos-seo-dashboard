@@ -468,101 +468,103 @@ window.runGA4Takeaway=function(){
   if(btn){btn.disabled=true;btn.textContent='Analysing\u2026';}
   if(out)out.innerHTML='<div style="padding:14px;font-size:11px;color:#555">Building executive briefing\u2026</div>';
 
+  // Wrap in try-catch to surface any runtime errors
+  try {
   var a=S.ga4,mktKey=S.market||'all';
+  if(!a){throw new Error('No GA4 data loaded');}
   var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
   var isUS=mktKey==='us';
 
-  // Get filtered rows for this market — SAME as what tabGA4 uses for header cards
+  // Get filtered rows — same as header cards
   var rows=getGA4FilteredRows(a.rows,mktKey);
   rows.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'other';});
 
-  // Totals must match EXACTLY what's shown in the header metric cards
+  // Totals matching header exactly
   var totViews=0,totKE=0,totViewsPrev=0,totKEPrev=0;
   rows.forEach(function(r){totViews+=r.views;totKE+=r.keyEvents;totViewsPrev+=r.viewsPrev||0;totKEPrev+=r.keyEventsPrev||0;});
 
-  // For page-level recommendations, exclude blacklisted (US only) so analysis focuses on revenue pages
+  // Clean rows for page recommendations
   var cleanRows=isUS?rows.filter(function(r){return !isBlacklisted(r.page);}):rows;
 
-  // High exit click pages (>30 exits) — from clean rows for focused recommendations
+  // Pages with 30+ exits
   var highExit=cleanRows.filter(function(r){return r.keyEvents>=30;})
-    .sort(function(a,b){return b.keyEvents-a.keyEvents;}).slice(0,12);
+    .sort(function(a2,b2){return b2.keyEvents-a2.keyEvents;}).slice(0,10);
 
-  // Best converting pages (min 20 views)
+  // Best converting (min 20 views)
   var bestConv=cleanRows.filter(function(r){return r.views>=20&&r.keyEvents>0;})
-    .map(function(r){r._cv=r.keyEvents/r.views*100;return r;})
-    .sort(function(a,b){return b._cv-a._cv;}).slice(0,8);
+    .map(function(r){return{page:r.page,views:r.views,keyEvents:r.keyEvents,viewsPrev:r.viewsPrev,_cv:r.keyEvents/r.views*100};})
+    .sort(function(a2,b2){return b2._cv-a2._cv;}).slice(0,6);
 
-  // Most viewed pages
-  var topViews=cleanRows.slice().sort(function(a,b){return b.views-a.views;}).slice(0,8);
+  // Most viewed
+  var topViews=cleanRows.slice().sort(function(a2,b2){return b2.views-a2.views;}).slice(0,6);
 
-  // Pages with view drop >20%
+  // Dropping pages
   var dropping=a.hasComparison?cleanRows.filter(function(r){
-    return r.viewsPrev>50&&r.views<r.viewsPrev&&((r.viewsPrev-r.views)/r.viewsPrev*100)>=20;
-  }).sort(function(a,b){return(b.viewsPrev-b.views)-(a.viewsPrev-a.views);}).slice(0,5):[];
+    return(r.viewsPrev||0)>50&&r.views<(r.viewsPrev||0)&&((r.viewsPrev-r.views)/r.viewsPrev*100)>=20;
+  }).sort(function(a2,b2){return(b2.viewsPrev-b2.views)-(a2.viewsPrev-a2.views);}).slice(0,4):[];
 
-  var prompt='You are briefing C-suite executives and VPs at casinos.com on GA4 performance for '+mktLabel+'.\n\n'
-    +'Be concise, direct, and commercial. Speak in business terms — revenue signals, conversion performance, traffic trends. '
-    +'No SEO jargon. No padding. Every sentence must contain a number.\n\n'
-    +'IMPORTANT: Use these exact numbers — they match what is shown on the dashboard.\n\n'
-    +'MARKET: '+mktLabel+' | PERIOD: '+(a.ds?drange(a.ds,a.de):'last period')+(a.hasComparison?' vs previous period':'')+'\n'
-    +'TOTAL VIEWS: '+totViews.toLocaleString()+(a.hasComparison?' (prev: '+totViewsPrev.toLocaleString()+', '+pct(totViews,totViewsPrev)+'%)':'')+'\n'
-    +'TOTAL EXIT CLICK GOALS: '+totKE+(a.hasComparison?' (prev: '+totKEPrev+', '+pct(totKE,totKEPrev)+'%)':'')+'\n'
-    +'AVG CONV RATE: '+(totViews>0?(totKE/totViews*100).toFixed(2):0)+'%\n\n'
-    +'PAGES WITH 30+ EXIT CLICKS (revenue-generating):\n'
-    +highExit.map(function(r){
-      var cv=(r.views>0?r.keyEvents/r.views*100:0).toFixed(1);
-      var cvp=(r.viewsPrev>0?(r.keyEventsPrev||0)/r.viewsPrev*100:0).toFixed(1);
-      var pg=r.page.replace(/^https?:\/\/[^/]+/,'');
-      return pg+'|'+r.views+'v|'+r.keyEvents+' exits|'+cv+'% conv'+(a.hasComparison?' (was '+cvp+'%)':'');
-    }).join('\n')
-    +'\n\nHIGHEST CONVERTING PAGES:\n'
-    +bestConv.map(function(r){
-      var cv=r._cv.toFixed(1);
-      var pg=r.page.replace(/^https?:\/\/[^/]+/,'');
-      return pg+'|'+r.views+'v|'+r.keyEvents+' exits|'+cv+'% conv rate';
-    }).join('\n')
-    +'\n\nMOST VIEWED PAGES:\n'
-    +topViews.slice(0,6).map(function(r){
-      var pg=r.page.replace(/^https?:\/\/[^/]+/,'');
-      var cv=(r.views>0?r.keyEvents/r.views*100:0).toFixed(1);
-      return pg+'|'+r.views+'v|'+r.keyEvents+' exits|'+cv+'% conv';
-    }).join('\n')
-    +(dropping.length?'\n\nNOTABLE TRAFFIC DROPS:\n'+dropping.map(function(r){
-      var drop=((r.viewsPrev-r.views)/r.viewsPrev*100).toFixed(0);
-      var pg=r.page.replace(/^https?:\/\/[^/]+/,'');
-      return pg+'|'+r.viewsPrev+'\u2192'+r.views+' views (-'+drop+'%)|'+r.keyEvents+' exits';
-    }).join('\n'):'')
-    +'\n\nWrite EXACTLY these 4 sections. Keep each section to 2-4 bullet points maximum. Be sharp and executive-level:\n\n'
-    +'## Performance Snapshot\n[2-3 sentences max. Total traffic and conversion trend in plain English. What\'s the headline?]\n\n'
-    +'## Where We\'re Making Money\n- [page: what it does commercially + numbers]\n\n'
-    +'## What Needs Attention\n- [page or trend: business impact + number]\n\n'
-    +'## One Thing To Action This Week\n[Single most important commercial action based on the data. One sentence.]';
+  var dateStr=a.ds?drange(a.ds,a.de):'last period';
+  var avgConv=totViews>0?(totKE/totViews*100).toFixed(2):0;
+
+  var prompt='You are briefing senior executives at casinos.com on GA4 performance.\n'
+    +'Be commercial, specific, and brief. Every sentence must contain a number. No SEO jargon.\n\n'
+    +'MARKET: '+mktLabel+' | PERIOD: '+dateStr+(a.hasComparison?' vs previous period':'')+'\n'
+    +'TOTAL VIEWS: '+totViews.toLocaleString()+(a.hasComparison?' (prev '+totViewsPrev.toLocaleString()+', '+pct(totViews,totViewsPrev)+'%)':'')+'\n'
+    +'TOTAL EXIT CLICK GOALS: '+totKE+(a.hasComparison?' (prev '+totKEPrev+', '+pct(totKE,totKEPrev)+'%)':'')+'\n'
+    +'AVG CONV RATE: '+avgConv+'%\n\n'
+    +(highExit.length?'REVENUE PAGES (30+ exits):\n'+highExit.map(function(r){var cv=(r.views>0?r.keyEvents/r.views*100:0).toFixed(1);return r.page.replace(/^https?:\/\/[^/]+/,'')+' | '+r.views+'v | '+r.keyEvents+' exits | '+cv+'% conv';}).join('\n')+'\n\n':'')
+    +(bestConv.length?'BEST CONVERTING:\n'+bestConv.map(function(r){return r.page.replace(/^https?:\/\/[^/]+/,'')+' | '+r.views+'v | '+r.keyEvents+' exits | '+r._cv.toFixed(1)+'% conv';}).join('\n')+'\n\n':'')
+    +(dropping.length?'NOTABLE DROPS:\n'+dropping.map(function(r){return r.page.replace(/^https?:\/\/[^/]+/,'')+' | '+(r.viewsPrev||0)+'v to '+r.views+'v';}).join('\n')+'\n\n':'')
+    +'Write EXACTLY 4 sections:\n'
+    +'## Performance Snapshot\n## Where We Are Making Money\n## What Needs Attention\n## One Thing To Action This Week';
+
+  // Timeout after 25 seconds
+  var timedOut=false;
+  var timer=setTimeout(function(){
+    timedOut=true;
+    if(btn){btn.disabled=false;btn.textContent='Generate briefing';}
+    if(out)out.innerHTML='<div style="color:#E05C3A;padding:12px;font-size:11px">Request timed out — please try again.</div>';
+  },25000);
 
   fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     model:'claude-sonnet-4-20250514',max_tokens:700,
     messages:[{role:'user',content:prompt}]
   })})
-  .then(function(r){return r.json();})
+  .then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  })
   .then(function(d){
-    S.ga4Takeaway=d.content&&d.content.length?d.content.map(function(c){return c.text||'';}).join(''):(d.error?'Error: '+JSON.stringify(d.error):'No response');
+    clearTimeout(timer);
+    if(timedOut)return;
+    S.ga4Takeaway=d.content&&d.content.length
+      ?d.content.map(function(c){return c.text||'';}).join('')
+      :(d.error?'API Error: '+JSON.stringify(d.error):'No response from API');
     if(btn){btn.disabled=false;btn.textContent='Regenerate briefing';}
     _renderGA4Takeaway();
   })
   .catch(function(e){
+    clearTimeout(timer);
+    if(timedOut)return;
     if(btn){btn.disabled=false;btn.textContent='Generate briefing';}
-    var o=$('ga4TakeawayOut');
-    if(o)o.innerHTML='<div style="color:#E05C3A;padding:12px;font-size:11px">Error: '+esc(e.message)+'</div>';
+    if(out)out.innerHTML='<div style="color:#E05C3A;padding:12px;font-size:11px">Error: '+esc(e.message)+'<br><small>Check that data is loaded and try again.</small></div>';
   });
+
+  } catch(setupErr){
+    // Catch any error in data setup before fetch
+    if(btn){btn.disabled=false;btn.textContent='Generate briefing';}
+    if(out)out.innerHTML='<div style="color:#E05C3A;padding:12px;font-size:11px">Setup error: '+esc(setupErr.message)+'</div>';
+  }
 };
 
 function _renderGA4Takeaway(){
   var out=$('ga4TakeawayOut');
   if(!out||!S.ga4Takeaway)return;
   var ST={
-    'Performance Snapshot':        {bg:'rgba(233,30,140,.07)', bc:'#E91E8C',tc:'#F48FB1'},
-    'Where We\'re Making Money':   {bg:'rgba(39,174,96,.07)',  bc:'#27AE60',tc:'#2ECC71'},
-    'What Needs Attention':        {bg:'rgba(224,92,58,.07)',  bc:'#E05C3A',tc:'#E8896A'},
-    'One Thing To Action This Week':{bg:'rgba(93,173,226,.07)', bc:'#5DADE2',tc:'#85C1E9'}
+    'Performance Snapshot':          {bg:'rgba(233,30,140,.07)', bc:'#E91E8C',tc:'#F48FB1'},
+    'Where We Are Making Money':     {bg:'rgba(39,174,96,.07)',  bc:'#27AE60',tc:'#2ECC71'},
+    'What Needs Attention':          {bg:'rgba(224,92,58,.07)',  bc:'#E05C3A',tc:'#E8896A'},
+    'One Thing To Action This Week': {bg:'rgba(93,173,226,.07)', bc:'#5DADE2',tc:'#85C1E9'}
   };
   var secs=S.ga4Takeaway.split(/^## /m).filter(Boolean);
   var html='<div style="margin-top:4px">'
