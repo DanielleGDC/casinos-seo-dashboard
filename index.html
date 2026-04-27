@@ -2096,57 +2096,132 @@ function render(){
 function doTab(){if(S.tab==='overview')tabOverview();else if(S.tab==='positions')tabPositions();else if(S.tab==='ga4')tabGA4();else if(S.tab==='keywords')tabKeywords();else if(S.tab==='decay')tabDecay();else if(S.tab==='cwv')tabCWV();else if(S.tab==='takeaways')tabTakeaways();}
 /* PDF EXPORT */
 async function downloadPDF(){
-  var btn=$('pdfBtn');if(btn){btn.textContent='Building PDF...';btn.disabled=true;}
+  var btn=$('pdfBtn');if(btn){btn.textContent='Building PDF\u2026';btn.disabled=true;}
   var g=S.gsc,a=S.ga4;if(!g&&!a){if(btn){btn.textContent='PDF';btn.disabled=false;}return;}
   var {jsPDF}=window.jspdf;
   var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   var pw=210,ph=297,mg=14,y=mg,lh=5.5;
-  var PINK=[233,30,140],BLACK=[14,14,14],WHITE=[240,240,240],GREY=[40,40,40],MID=[136,136,136],GRN=[39,174,96],RED=[224,92,58],AMBER=[212,136,42];
+  var PINK=[233,30,140],BLACK=[14,14,14],WHITE=[240,240,240],GREY=[40,40,40],MID=[136,136,136],GRN=[39,174,96],RED=[224,92,58],AMBER=[212,136,42],BLUE=[93,173,226];
+  var mktKey=S.market||'all';
+  var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
+
   function sf(size,bold,col){doc.setFontSize(size);doc.setFont('helvetica',bold?'bold':'normal');col=col||WHITE;doc.setTextColor(col[0],col[1],col[2]);}
   function np(){doc.addPage();y=mg;doc.setFillColor(BLACK[0],BLACK[1],BLACK[2]);doc.rect(0,0,pw,ph,'F');}
   function cp(need){if(y+need>ph-12)np();}
-  function secHead(title){cp(10);sf(7,true,[85,85,85]);doc.text(title,mg,y);y+=1;doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.rect(mg,y,12,0.5,'F');y+=4;}
-  function ptColor(type){return type==='state'?[93,173,226]:type==='news'?AMBER:type==='bofu'?GRN:type==='casino'?PINK:type==='social'?[155,89,182]:MID;}
+  function secHead(title,col){cp(12);col=col||PINK;doc.setFillColor(GREY[0],GREY[1],GREY[2]);doc.roundedRect(mg,y,pw-mg*2,8,1,1,'F');doc.setFillColor(col[0],col[1],col[2]);doc.roundedRect(mg,y,2,8,1,1,'F');sf(7.5,true,col);doc.text(title,mg+5,y+5.5);y+=11;}
+  function ptColor(type){return type==='state'?BLUE:type==='news'?AMBER:type==='bofu'?GRN:type==='casino'?PINK:type==='social'?[155,89,182]:MID;}
+  function rowBg(i){doc.setFillColor(i%2===0?22:28,i%2===0?22:28,i%2===0?22:28);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');}
+  function tblHead(cols){doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6,true,BLACK);cols.forEach(function(c){doc.text(c.t,c.x,y,{align:c.a||'left'});});y+=lh;}
+  function aiSection(text, accentCol){
+    if(!text)return;
+    accentCol=accentCol||PINK;
+    var secs=text.split(/^## /m).filter(Boolean);
+    secs.forEach(function(sec){
+      var parts=sec.split('\n'),title=parts[0].trim(),body=parts.slice(1).join('\n').trim();
+      cp(18);
+      doc.setFillColor(GREY[0],GREY[1],GREY[2]);doc.roundedRect(mg,y,pw-mg*2,9,1,1,'F');
+      doc.setFillColor(accentCol[0],accentCol[1],accentCol[2]);doc.roundedRect(mg,y,2,9,1,1,'F');
+      sf(7.5,true,accentCol);doc.text(title,mg+5,y+6);y+=11;
+      var wrapped=doc.splitTextToSize(body,pw-mg*2-4);
+      sf(6.5,false,[180,180,180]);
+      for(var li3=0;li3<Math.min(wrapped.length,30);li3++){cp(lh+1);doc.text(wrapped[li3],mg+3,y);y+=lh;}
+      y+=4;
+    });
+  }
+
+  // Cover header — always shown
   doc.setFillColor(BLACK[0],BLACK[1],BLACK[2]);doc.rect(0,0,pw,ph,'F');
   doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.roundedRect(mg,y,pw-mg*2,22,2,2,'F');
-  sf(16,true,BLACK);doc.text('casinos.com SEO Dashboard v2.3',mg+8,y+9);
+  sf(15,true,BLACK);doc.text('casinos.com SEO Dashboard v2.3',mg+8,y+9);
+  sf(8,true,BLACK);doc.text(mktLabel,pw-mg-2,y+9,{align:'right'});
   var dateStr=g?(g.ds?fdate(g.ds)+' \u2013 '+fdate(g.de):g.dateRange):'';
-  sf(7,false,BLACK);doc.text(dateStr,pw-mg-2,y+9,{align:'right'});
-  sf(6,false,BLACK);doc.text('Generated '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),pw-mg-2,y+14,{align:'right'});
+  sf(6,false,BLACK);doc.text(dateStr,pw-mg-2,y+14,{align:'right'});
+  sf(6,false,BLACK);doc.text('Generated '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),mg+8,y+16);
+
+  // Tab label badge
+  var tabNames={overview:'Overview',positions:'GSC Positions',ga4:'GA4 Traffic & Conversions',keywords:'Keywords',decay:'Content Decay',cwv:'Core Web Vitals',takeaways:'AI Takeaways'};
+  sf(7,true,BLACK);doc.text((tabNames[S.tab]||S.tab).toUpperCase(),mg+8,y+20);
   y+=28;
-  if(g){
-    var lc=0,pc=0,li=0,pi=0;g.pages.forEach(function(p){lc+=p.lc;pc+=p.pc;li+=p.li;pi+=p.pi;});
-    var mPDF=a?a.rows.filter(function(r){return r.pageType==='bofu'||r.pageType==='casino'||r.pageType==='state'||r.pageType==='Money Page';}):[];
-    var totV=0,totKE=0,totVP=0,totKEP=0;mPDF.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
-    secHead('OVERVIEW [GSC + GA4]');
-    var cards=[{l:'Clicks',v:fmt(lc),d:pct(lc,pc),ok:g.hasComparison},{l:'Impressions',v:fmt(li),d:pct(li,pi),ok:g.hasComparison},{l:'GA4 Views',v:totV>0?fmt(totV):'\u2014',d:pct(totV,totVP),ok:a&&a.hasComparison&&totVP>0},{l:'Exit Clicks',v:totKE>0?fmt(totKE):'\u2014',d:pct(totKE,totKEP),ok:a&&a.hasComparison&&totKEP>0}];
+
+  // ── TAB-SPECIFIC CONTENT ──────────────────────────────────────
+
+  if(S.tab==='overview'){
+    // Summary metric cards
+    var lc=0,pc=0,li2=0,pi2=0;
+    var mktPgs=g?g.pages.filter(function(p){return matchMarket(p.key,mktKey);}):[];
+    mktPgs.forEach(function(p){lc+=p.lc;pc+=p.pc;li2+=p.li;pi2+=p.pi;});
+    var mGA4=a?getGA4FilteredRows(a.rows,mktKey):[];
+    var totV=0,totKE=0,totVP=0,totKEP=0;
+    mGA4.forEach(function(r){totV+=r.views;totKE+=r.keyEvents;totVP+=r.viewsPrev||0;totKEP+=r.keyEventsPrev||0;});
+    var cards=[{l:'GSC Clicks',v:fmt(lc),d:pct(lc,pc),ok:g.hasComparison&&S.compareMode},{l:'Impressions',v:fmt(li2),d:pct(li2,pi2),ok:g.hasComparison&&S.compareMode},{l:'GA4 Views',v:totV>0?fmt(totV):'\u2014',d:pct(totV,totVP),ok:a&&a.hasComparison&&S.compareMode},{l:'Exit Clicks',v:totKE>0?fmt(totKE):'\u2014',d:pct(totKE,totKEP),ok:a&&a.hasComparison&&S.compareMode}];
     var cw=(pw-mg*2-6)/4,cx=mg;
-    cards.forEach(function(c){doc.setFillColor(GREY[0],GREY[1],GREY[2]);doc.roundedRect(cx,y,cw,20,1.5,1.5,'F');doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.roundedRect(cx,y,cw,1.5,1,1,'F');sf(6.5,false,MID);doc.text(c.l,cx+3,y+6);sf(14,true,WHITE);doc.text(c.v,cx+3,y+14);if(c.ok){var d=parseFloat(c.d),col=d>=0?GRN:RED;sf(7,true,col);doc.text((d>=0?'\u2191':'\u2193')+Math.abs(d)+'%',cx+3,y+18);}cx+=cw+2;});
-    y+=24;
-    secHead('POSITION MOVEMENT [GSC]');
-    var posPages=g.pages.filter(function(p){return matchMarket(p.key,S.market||'all');}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,40);
-    doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6,true,BLACK);doc.text('Type',mg+2,y);doc.text('Page',mg+18,y);if(g.hasComparison){doc.text('Prev',mg+112,y,{align:'right'});doc.text('Curr',mg+124,y,{align:'right'});doc.text('Chg',mg+138,y,{align:'right'});}doc.text('Clicks',mg+152,y,{align:'right'});doc.text('Impr.',pw-mg-2,y,{align:'right'});y+=lh;
-    posPages.forEach(function(p,i){cp(6);var d=p.pp>0&&p.lp>0?p.pp-p.lp:null;doc.setFillColor(i%2===0?22:28,i%2===0?22:28,i%2===0?22:28);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');var ptc=ptColor(getPageType(p.key));doc.setFillColor(ptc[0],ptc[1],ptc[2]);doc.roundedRect(mg+1,y-2.5,14,4,1,1,'F');sf(5.5,true,BLACK);doc.text((PTC[getPageType(p.key)]||PTC.other).label.slice(0,6),mg+8,y,{align:'center'});sf(6.5,false,WHITE);doc.text(slug(p.key).slice(0,52),mg+18,y);if(g.hasComparison){sf(6.5,false,MID);doc.text(p.pp>0?p.pp.toFixed(1):'\u2014',mg+112,y,{align:'right'});sf(6.5,false,WHITE);doc.text(p.lp>0?p.lp.toFixed(1):'\u2014',mg+124,y,{align:'right'});if(d!=null){sf(6.5,true,d>0?GRN:d<0?RED:MID);doc.text((d>0?'+':'')+d.toFixed(1),mg+138,y,{align:'right'});}}sf(6.5,false,p.lc>p.pc?GRN:WHITE);doc.text(fmt(p.lc),mg+152,y,{align:'right'});sf(6.5,false,MID);doc.text(fmt(p.li),pw-mg-2,y,{align:'right'});y+=lh;});y+=4;
+    cards.forEach(function(c){doc.setFillColor(GREY[0],GREY[1],GREY[2]);doc.roundedRect(cx,y,cw,20,1.5,1.5,'F');doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.roundedRect(cx,y,cw,1.5,1,1,'F');sf(6.5,false,MID);doc.text(c.l,cx+3,y+6);sf(14,true,WHITE);doc.text(c.v,cx+3,y+14);if(c.ok){var d=parseFloat(c.d),col=d>=0?GRN:RED;sf(7,true,col);doc.text((d>=0?'\u2191':'\u2193')+Math.abs(d)+'%',cx+3,y+18);}cx+=cw+2;});y+=24;
+    // Top pages
+    secHead('TOP PAGES BY CLICKS [GSC]');
+    var topPgs=mktPgs.slice().sort(function(a,b){return b.lc-a.lc;}).slice(0,25);
+    tblHead([{t:'Type',x:mg+2},{t:'Page',x:mg+18},{t:'Clicks',x:mg+112,a:'right'},{t:'Chg',x:mg+124,a:'right'},{t:'Pos.',x:mg+140,a:'right'},{t:'Impr.',x:pw-mg-2,a:'right'}]);
+    topPgs.forEach(function(p,i){cp(6);rowBg(i);var ptc=ptColor(getPageType(p.key));doc.setFillColor(ptc[0],ptc[1],ptc[2]);doc.roundedRect(mg+1,y-2.5,14,4,1,1,'F');sf(5.5,true,BLACK);doc.text((PTC[getPageType(p.key)]||PTC.other).label.slice(0,6),mg+8,y,{align:'center'});sf(6.5,false,WHITE);doc.text(slug(p.key).slice(0,52),mg+18,y);sf(6.5,false,WHITE);doc.text(fmt(p.lc),mg+112,y,{align:'right'});if(g.hasComparison&&S.compareMode){var d2=p.lc-p.pc;sf(6.5,true,d2>=0?GRN:RED);doc.text((d2>=0?'+':'')+fmt(d2),mg+124,y,{align:'right'});}sf(6.5,false,p.lp<=3?PINK:p.lp<=10?GRN:MID);doc.text(p.lp>0?p.lp.toFixed(1):'\u2014',mg+140,y,{align:'right'});sf(6.5,false,MID);doc.text(fmt(p.li),pw-mg-2,y,{align:'right'});y+=lh;});
+
+  } else if(S.tab==='positions'){
+    var mktPgs2=g?g.pages.filter(function(p){return matchMarket(p.key,mktKey);}).sort(function(a,b){return(b.pp-b.lp)-(a.pp-a.lp);}).slice(0,60):[];
+    secHead('POSITION MOVEMENT [GSC] \u2014 '+mktLabel);
+    tblHead([{t:'Type',x:mg+2},{t:'Page',x:mg+18},{t:'Prev pos',x:mg+112,a:'right'},{t:'Curr pos',x:mg+126,a:'right'},{t:'Change',x:mg+140,a:'right'},{t:'Clicks',x:mg+156,a:'right'},{t:'Impr.',x:pw-mg-2,a:'right'}]);
+    mktPgs2.forEach(function(p,i){cp(6);rowBg(i);var d=p.pp>0&&p.lp>0?p.pp-p.lp:null;var ptc=ptColor(getPageType(p.key));doc.setFillColor(ptc[0],ptc[1],ptc[2]);doc.roundedRect(mg+1,y-2.5,14,4,1,1,'F');sf(5.5,true,BLACK);doc.text((PTC[getPageType(p.key)]||PTC.other).label.slice(0,6),mg+8,y,{align:'center'});sf(6.5,false,WHITE);doc.text(slug(p.key).slice(0,52),mg+18,y);sf(6.5,false,MID);doc.text(p.pp>0?p.pp.toFixed(1):'\u2014',mg+112,y,{align:'right'});sf(6.5,false,WHITE);doc.text(p.lp>0?p.lp.toFixed(1):'\u2014',mg+126,y,{align:'right'});if(d!=null){sf(6.5,true,d>0?GRN:d<0?RED:MID);doc.text((d>0?'+':'')+d.toFixed(1),mg+140,y,{align:'right'});}sf(6.5,false,WHITE);doc.text(fmt(p.lc),mg+156,y,{align:'right'});sf(6.5,false,MID);doc.text(fmt(p.li),pw-mg-2,y,{align:'right'});y+=lh;});
+
+  } else if(S.tab==='ga4'){
+    var mGA42=a?getGA4FilteredRows(a.rows,mktKey).slice().sort(function(a,b){return b.keyEvents-a.keyEvents;}).slice(0,60):[];
+    secHead('GA4 TRAFFIC & EXIT CLICKS \u2014 '+mktLabel);
+    tblHead([{t:'Type',x:mg+2},{t:'Page',x:mg+18},{t:'Views',x:mg+108,a:'right'},{t:'Prev views',x:mg+123,a:'right'},{t:'Exit Clicks',x:mg+140,a:'right'},{t:'Conv.%',x:mg+158,a:'right'},{t:'Eng. Time',x:pw-mg-2,a:'right'}]);
+    mGA42.forEach(function(r,i){cp(6);rowBg(i);var cv=r.views>0?r.keyEvents/r.views*100:0;var ptc=ptColor(getPageType(r.page));doc.setFillColor(ptc[0],ptc[1],ptc[2]);doc.roundedRect(mg+1,y-2.5,14,4,1,1,'F');sf(5.5,true,BLACK);doc.text((PTC[getPageType(r.page)]||PTC.other).label.slice(0,6),mg+8,y,{align:'center'});sf(6.5,false,WHITE);var pg=r.page.replace(/^https?:\/\/[^/]+/,'');doc.text(pg.slice(0,50),mg+18,y);sf(6.5,false,WHITE);doc.text(fmt(r.views),mg+108,y,{align:'right'});sf(6.5,false,MID);doc.text(a.hasComparison&&S.compareMode?fmt(r.viewsPrev||0):'\u2014',mg+123,y,{align:'right'});sf(6.5,true,r.keyEvents>=30?PINK:r.keyEvents>0?WHITE:MID);doc.text(fmt(r.keyEvents),mg+140,y,{align:'right'});var cvCol=cv>=20?GRN:cv>=10?AMBER:cv>0?WHITE:MID;sf(6.5,true,cvCol);doc.text(cv.toFixed(1)+'%',mg+158,y,{align:'right'});sf(6.5,false,MID);doc.text(fmtTime(r.engTime),pw-mg-2,y,{align:'right'});y+=lh;});
+    // GA4 Executive Briefing if generated
+    if(S.ga4Takeaway){np();secHead('GA4 EXECUTIVE BRIEFING \u2014 powered by Claude',BLUE);y+=2;aiSection(S.ga4Takeaway,BLUE);}
+
+  } else if(S.tab==='keywords'){
+    var mktQ=g?g.queries.filter(function(q){return mktKey==='all'||matchMarket(q.page,mktKey);}).slice().sort(function(a,b){return b.li-a.li;}).slice(0,60):[];
+    secHead('KEYWORDS \u2014 '+mktLabel+' [GSC]');
+    tblHead([{t:'Query',x:mg+2},{t:'Page',x:mg+80},{t:'Impr.',x:mg+128,a:'right'},{t:'Clicks',x:mg+142,a:'right'},{t:'CTR',x:mg+156,a:'right'},{t:'Pos.',x:pw-mg-2,a:'right'}]);
+    mktQ.forEach(function(q,i){cp(6);rowBg(i);sf(6.5,false,WHITE);doc.text(q.key.slice(0,38),mg+2,y);sf(6.5,false,MID);var pg2=(q.page||'').replace(/^https?:\/\/[^/]+/,'');doc.text(pg2.slice(0,28),mg+80,y);doc.text(q.li.toLocaleString(),mg+128,y,{align:'right'});sf(6.5,false,q.lc>0?WHITE:MID);doc.text(String(q.lc),mg+142,y,{align:'right'});sf(6.5,false,MID);doc.text(q.lctr,mg+156,y,{align:'right'});sf(6.5,false,q.lp<=3?PINK:q.lp<=10?GRN:MID);doc.text(q.lp>0?q.lp.toFixed(1):'\u2014',pw-mg-2,y,{align:'right'});y+=lh;});
+
+  } else if(S.tab==='decay'){
+    var decayRows=g?g.pages.filter(function(p){return matchMarket(p.key,mktKey)&&p.pc>=20&&p.lc<p.pc&&((p.pc-p.lc)/p.pc*100)>=(S.decayMinPct||15);}).sort(function(a,b){return(b.pc-b.lc)-(a.pc-a.lc);}).slice(0,50):[];
+    secHead('CONTENT DECAY \u2014 '+mktLabel,RED);
+    // Summary line
+    var totalLost=decayRows.reduce(function(s,p){return s+(p.pc-p.lc);},0);
+    sf(7,false,MID);doc.text(decayRows.length+' pages decaying \u2014 est. '+totalLost.toLocaleString()+' lost clicks vs previous period',mg,y);y+=8;
+    tblHead([{t:'Severity',x:mg+2},{t:'Page',x:mg+26},{t:'Cause',x:mg+106},{t:'Prev Cl.',x:mg+134,a:'right'},{t:'Curr Cl.',x:mg+148,a:'right'},{t:'Drop %',x:mg+162,a:'right'},{t:'Pos. Chg',x:pw-mg-2,a:'right'}]);
+    var CAUSES2={ranking_loss:'Ranking loss',ranking_drop:'Pos. drop',visibility_loss:'Visibility',ctr_drop:'CTR drop',traffic_loss:'Traffic loss',unknown:'Decline'};
+    decayRows.forEach(function(p,i){cp(6);rowBg(i);var drop=(p.pc-p.lc)/p.pc*100;var sev=drop>=50?'Critical':drop>=25?'High':drop>=15?'Medium':'Low';var sevCol=drop>=50?RED:drop>=25?AMBER:MID;var posD=p.lp>0&&p.pp>0?p.lp-p.pp:null;var cause=drop>3&&(p.pi-p.li)/Math.max(p.pi,1)*100>10?'ranking_loss':posD&&posD>2?'ranking_drop':(p.pi-p.li)/Math.max(p.pi,1)*100>15?'visibility_loss':drop>20&&(!posD||Math.abs(posD)<1)?'ctr_drop':'traffic_loss';sf(5.5,true,sevCol);doc.text(sev,mg+2,y);sf(6.5,false,WHITE);doc.text(slug(p.key).slice(0,42),mg+26,y);sf(6,false,MID);doc.text(CAUSES2[cause]||'Decline',mg+106,y);sf(6.5,false,MID);doc.text(fmt(p.pc),mg+134,y,{align:'right'});sf(6.5,false,WHITE);doc.text(fmt(p.lc),mg+148,y,{align:'right'});sf(6.5,true,sevCol);doc.text('-'+drop.toFixed(0)+'%',mg+162,y,{align:'right'});if(posD!=null){sf(6.5,true,posD<0?GRN:posD>0?RED:MID);doc.text((posD>0?'+':'')+posD.toFixed(1),pw-mg-2,y,{align:'right'});}y+=lh;});
+    if(S.decayReport){np();secHead('DECAY RECOVERY PLAN \u2014 powered by Claude',RED);y+=2;aiSection(S.decayReport,RED);}
+
+  } else if(S.tab==='cwv'){
+    var cwvRows=Object.entries(S.cwvData||{}).filter(function(e){return e[1]&&!e[1].loading;}).sort(function(a,b){var sa=a[1].score!=null?a[1].score:1;var sb=b[1].score!=null?b[1].score:1;return sa-sb;});
+    secHead('CORE WEB VITALS \u2014 '+mktLabel+' ('+S.cwvStrategy.toUpperCase()+')',BLUE);
+    sf(7,false,MID);doc.text('Source: Google PageSpeed Insights \u2022 '+new Date().toLocaleDateString(),mg,y);y+=8;
+    tblHead([{t:'Page',x:mg+2},{t:'Score',x:mg+82,a:'right'},{t:'LCP',x:mg+98,a:'right'},{t:'CLS',x:mg+114,a:'right'},{t:'INP',x:mg+130,a:'right'},{t:'FCP',x:mg+146,a:'right'},{t:'TTFB',x:pw-mg-2,a:'right'}]);
+    cwvRows.forEach(function(entry,i){cp(6);rowBg(i);var url=entry[0].replace('https://www.casinos.com','');var d=entry[1];if(d.error){sf(6.5,false,WHITE);doc.text(url.slice(0,45),mg+2,y);sf(6.5,false,RED);doc.text(d.error.slice(0,40),mg+85,y);y+=lh;return;}var sc=d.score!=null?Math.round(d.score*100):null;sf(6.5,false,WHITE);doc.text(url.slice(0,45),mg+2,y);sf(6.5,true,sc!=null?(sc>=90?GRN:sc>=50?AMBER:RED):MID);doc.text(sc!=null?String(sc)+'%':'\u2014',mg+82,y,{align:'right'});function cwvFmt(v,m){if(v==null)return'\u2014';return v>=1000?(v/1000).toFixed(1)+'s':Math.round(v)+(m==='ms'?'ms':v.toFixed?v.toFixed(3):'');}function cwvCol(m,v){if(v==null)return MID;var t={lcp:{g:2500,p:4000},cls:{g:0.1,p:0.25},inp:{g:200,p:500},fcp:{g:1800,p:3000},ttfb:{g:800,p:1800}}[m];return t?(v<=t.g?GRN:v<=t.p?AMBER:RED):MID;}sf(6.5,true,cwvCol('lcp',d.lcp));doc.text(cwvFmt(d.lcp,'ms'),mg+98,y,{align:'right'});sf(6.5,true,cwvCol('cls',d.cls));doc.text(d.cls!=null?d.cls.toFixed(3):'\u2014',mg+114,y,{align:'right'});sf(6.5,true,cwvCol('inp',d.inp));doc.text(cwvFmt(d.inp,'ms'),mg+130,y,{align:'right'});sf(6.5,true,cwvCol('fcp',d.fcp));doc.text(cwvFmt(d.fcp,'ms'),mg+146,y,{align:'right'});sf(6.5,true,cwvCol('ttfb',d.ttfb));doc.text(cwvFmt(d.ttfb,'ms'),pw-mg-2,y,{align:'right'});y+=lh;});
+    if(S.cwvReport){np();secHead('CWV ANALYSIS \u2014 powered by Claude',BLUE);y+=2;aiSection(S.cwvReport,BLUE);}
+
+  } else if(S.tab==='takeaways'){
+    // AI Takeaways — full report, nicely formatted
+    if(S.ta){
+      secHead('AI TAKEAWAYS \u2014 '+mktLabel,PINK);
+      var dr=g?(g.ds?fdate(g.ds)+' \u2013 '+fdate(g.de):g.dateRange):'';
+      sf(7,false,MID);doc.text(dr+' \u2022 Powered by Claude AI',mg,y);y+=8;
+      aiSection(S.ta,PINK);
+    } else {
+      sf(10,false,MID);doc.text('No AI Takeaways generated yet.',mg,y);y+=8;
+      sf(7,false,[80,80,80]);doc.text('Go to the AI Takeaways tab and click Generate AI Takeaways first.',mg,y);
+    }
   }
-  if(a&&a.rows.length){
-    np();secHead('GA4 TRAFFIC & EXIT CLICKS [GA4]');
-    var ga4Rows=a.rows.slice().sort(function(a,b){return b.views-a.views;}).slice(0,50);
-    doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6,true,BLACK);doc.text('Type',mg+2,y);doc.text('Page',mg+18,y);doc.text('Views',mg+108,y,{align:'right'});if(a.hasComparison)doc.text('Prev',mg+120,y,{align:'right'});doc.text('Exit Cl.',mg+132,y,{align:'right'});doc.text('Conv%',mg+148,y,{align:'right'});doc.text('Eng.',pw-mg-2,y,{align:'right'});y+=lh;
-    ga4Rows.forEach(function(r,i){cp(6);var cv=r.views>0?r.keyEvents/r.views*100:0;doc.setFillColor(i%2===0?22:28,i%2===0?22:28,i%2===0?22:28);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');var ptc=ptColor(getPageType(r.page));doc.setFillColor(ptc[0],ptc[1],ptc[2]);doc.roundedRect(mg+1,y-2.5,14,4,1,1,'F');sf(5.5,true,BLACK);doc.text((PTC[getPageType(r.page)]||PTC.other).label.slice(0,6),mg+8,y,{align:'center'});sf(6.5,false,WHITE);doc.text(r.page.slice(0,52),mg+18,y);sf(6.5,false,WHITE);doc.text(fmt(r.views),mg+108,y,{align:'right'});if(a.hasComparison){sf(6.5,false,MID);doc.text(fmt(r.viewsPrev||0),mg+120,y,{align:'right'});}sf(6.5,false,r.keyEvents>=50?PINK:WHITE);doc.text(fmt(r.keyEvents),mg+132,y,{align:'right'});var cvCol=cv>=25?GRN:cv>=12?PINK:cv<3&&r.views>50?RED:WHITE;sf(6.5,true,cvCol);doc.text(cv.toFixed(1)+'%',mg+148,y,{align:'right'});sf(6.5,false,MID);doc.text(fmtTime(r.engTime),pw-mg-2,y,{align:'right'});y+=lh;});y+=4;
-  }
-  if(g&&g.queries.length){
-    np();secHead('KEYWORDS [GSC]');
-    var topQ=g.queries.slice().sort(function(a,b){return b.li-a.li;}).slice(0,25);
-    doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6,true,BLACK);doc.text('Query',mg+2,y);doc.text('Impr.',mg+95,y,{align:'right'});doc.text('Clicks',mg+113,y,{align:'right'});doc.text('CTR',mg+127,y,{align:'right'});doc.text('Pos.',mg+143,y,{align:'right'});doc.text('Chg',pw-mg-2,y,{align:'right'});y+=lh;
-    topQ.forEach(function(q,i){cp(6);var d=q.pp>0&&q.lp>0?q.pp-q.lp:null;doc.setFillColor(i%2===0?22:28,i%2===0?22:28,i%2===0?22:28);doc.rect(mg,y-3.5,pw-mg*2,5.5,'F');sf(6.5,false,WHITE);doc.text(q.key.slice(0,55),mg+2,y);sf(6.5,false,MID);doc.text(q.li.toLocaleString(),mg+95,y,{align:'right'});sf(6.5,false,q.lc>0?WHITE:MID);doc.text(String(q.lc),mg+113,y,{align:'right'});sf(6.5,false,MID);doc.text(q.lctr,mg+127,y,{align:'right'});sf(6.5,false,q.lp>0&&q.lp<=3?PINK:q.lp<=10?GRN:MID);doc.text(q.lp>0?q.lp.toFixed(1):'\u2014',mg+143,y,{align:'right'});if(d!=null){sf(6.5,true,d>0?GRN:d<0?RED:MID);doc.text((d>0?'+':'')+d.toFixed(1),pw-mg-2,y,{align:'right'});}y+=lh;});
-  }
-  if(S.ta){
-    np();secHead('AI TAKEAWAYS');
-    S.ta.split(/^## /m).filter(Boolean).forEach(function(sec){var parts=sec.split('\n'),title=parts[0].trim(),body=parts.slice(1).join('\n').trim();cp(18);doc.setFillColor(GREY[0],GREY[1],GREY[2]);doc.roundedRect(mg,y,pw-mg*2,9,1,1,'F');doc.setFillColor(PINK[0],PINK[1],PINK[2]);doc.roundedRect(mg,y,2,9,1,1,'F');sf(7.5,true,PINK);doc.text(title,mg+5,y+6);y+=11;var wrapped=doc.splitTextToSize(body,pw-mg*2-4);sf(6.5,false,[180,180,180]);for(var li3=0;li3<Math.min(wrapped.length,8);li3++){cp(lh+1);doc.text(wrapped[li3],mg+3,y);y+=lh;}y+=4;});
-  }
+
+  // Page footers
   var nPages=doc.internal.getNumberOfPages();
-  for(var pg=1;pg<=nPages;pg++){doc.setPage(pg);doc.setFillColor(20,20,20);doc.rect(0,ph-8,pw,8,'F');sf(5.5,false,[60,60,60]);doc.text('casinos.com SEO Dashboard v2.3 \u2014 Confidential',mg,ph-3);doc.text('Page '+pg+' of '+nPages,pw-mg,ph-3,{align:'right'});}
-  doc.save('casinos-seo-'+new Date().toISOString().split('T')[0]+'.pdf');
+  for(var pg=1;pg<=nPages;pg++){doc.setPage(pg);doc.setFillColor(20,20,20);doc.rect(0,ph-8,pw,8,'F');sf(5.5,false,[60,60,60]);doc.text('casinos.com SEO Dashboard v2.3 \u2014 Confidential \u2014 '+mktLabel,mg,ph-3);doc.text('Page '+pg+' of '+nPages,pw-mg,ph-3,{align:'right'});}
+
+  // Save with tab-specific filename
+  var tabFilenames={overview:'overview',positions:'positions',ga4:'ga4',keywords:'keywords',decay:'content-decay',cwv:'core-web-vitals',takeaways:'ai-takeaways'};
+  var fname='casinos-seo-'+(tabFilenames[S.tab]||S.tab)+'-'+mktKey+'-'+new Date().toISOString().split('T')[0]+'.pdf';
+  doc.save(fname);
   if(btn){btn.innerHTML='<svg viewBox="0 0 16 16" style="width:13px;height:13px;fill:currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zm-5 2h10v1.5H3V14z"/></svg> PDF';btn.disabled=false;}
 }
 window.downloadPDF=downloadPDF;
