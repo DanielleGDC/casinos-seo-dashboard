@@ -472,14 +472,18 @@ window.runGA4Takeaway=function(){
   var mktLabel=MARKETS[mktKey]?MARKETS[mktKey].label:mktKey;
   var isUS=mktKey==='us';
 
-  // Get filtered rows for this market
+  // Get filtered rows for this market — SAME as what tabGA4 uses for header cards
   var rows=getGA4FilteredRows(a.rows,mktKey);
   rows.forEach(function(r){if(!r.pageType)r.pageType=getPageType(r.page)||'other';});
 
-  // Exclude blacklisted for US
+  // Totals must match EXACTLY what's shown in the header metric cards
+  var totViews=0,totKE=0,totViewsPrev=0,totKEPrev=0;
+  rows.forEach(function(r){totViews+=r.views;totKE+=r.keyEvents;totViewsPrev+=r.viewsPrev||0;totKEPrev+=r.keyEventsPrev||0;});
+
+  // For page-level recommendations, exclude blacklisted (US only) so analysis focuses on revenue pages
   var cleanRows=isUS?rows.filter(function(r){return !isBlacklisted(r.page);}):rows;
 
-  // High exit click pages (>30 exits)
+  // High exit click pages (>30 exits) — from clean rows for focused recommendations
   var highExit=cleanRows.filter(function(r){return r.keyEvents>=30;})
     .sort(function(a,b){return b.keyEvents-a.keyEvents;}).slice(0,12);
 
@@ -489,25 +493,21 @@ window.runGA4Takeaway=function(){
     .sort(function(a,b){return b._cv-a._cv;}).slice(0,8);
 
   // Most viewed pages
-  var topViews=cleanRows.sort(function(a,b){return b.views-a.views;}).slice(0,8);
+  var topViews=cleanRows.slice().sort(function(a,b){return b.views-a.views;}).slice(0,8);
 
-  // Pages with view drop >20% (if comparison available)
+  // Pages with view drop >20%
   var dropping=a.hasComparison?cleanRows.filter(function(r){
     return r.viewsPrev>50&&r.views<r.viewsPrev&&((r.viewsPrev-r.views)/r.viewsPrev*100)>=20;
   }).sort(function(a,b){return(b.viewsPrev-b.views)-(a.viewsPrev-a.views);}).slice(0,5):[];
 
-  // Totals
-  var totViews=0,totKE=0,totViewsPrev=0,totKEPrev=0;
-  cleanRows.forEach(function(r){totViews+=r.views;totKE+=r.keyEvents;totViewsPrev+=r.viewsPrev||0;totKEPrev+=r.keyEventsPrev||0;});
-
-  var dr=a.ds?drange(a.ds,a.de):'last period';
-
   var prompt='You are briefing C-suite executives and VPs at casinos.com on GA4 performance for '+mktLabel+'.\n\n'
     +'Be concise, direct, and commercial. Speak in business terms — revenue signals, conversion performance, traffic trends. '
-    +'No SEO jargon. No "it is worth noting". No padding. Every sentence must contain a number.\n\n'
-    +'MARKET: '+mktLabel+' | PERIOD: '+dr+(a.hasComparison?' vs previous period':'')+'\n\n'
-    +'TOTAL: '+totViews.toLocaleString()+' views'+(a.hasComparison?' (prev: '+totViewsPrev.toLocaleString()+', '+pct(totViews,totViewsPrev)+'%)':'')+' | '
-    +totKE+' exit click goals'+(a.hasComparison?' (prev: '+totKEPrev+', '+pct(totKE,totKEPrev)+'%)':'')+'\n\n'
+    +'No SEO jargon. No padding. Every sentence must contain a number.\n\n'
+    +'IMPORTANT: Use these exact numbers — they match what is shown on the dashboard.\n\n'
+    +'MARKET: '+mktLabel+' | PERIOD: '+dr+(a.hasComparison?' vs previous period':'')+'\n'
+    +'TOTAL VIEWS: '+totViews.toLocaleString()+(a.hasComparison?' (prev: '+totViewsPrev.toLocaleString()+', '+pct(totViews,totViewsPrev)+'%)':'')+'\n'
+    +'TOTAL EXIT CLICK GOALS: '+totKE+(a.hasComparison?' (prev: '+totKEPrev+', '+pct(totKE,totKEPrev)+'%)':'')+'\n'
+    +'AVG CONV RATE: '+(totViews>0?(totKE/totViews*100).toFixed(2):0)+'%\n\n'
     +'PAGES WITH 30+ EXIT CLICKS (revenue-generating):\n'
     +highExit.map(function(r){
       var cv=(r.views>0?r.keyEvents/r.views*100:0).toFixed(1);
