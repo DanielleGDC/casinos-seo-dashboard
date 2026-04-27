@@ -1714,27 +1714,32 @@ function _fetchCWV(url,cb){
     +'?url='+encodeURIComponent(url)
     +'&strategy='+S.cwvStrategy
     +(S.cwvApiKey?'&key='+encodeURIComponent(S.cwvApiKey):'');
-  // Note: no &category=performance filter — get full response
 
   fetch(apiUrl)
   .then(function(r){
-    S.cwvData[url]={error:'Not accessible — likely bot/crawler protection on this page'};
-    cb();return;
+    // Throw on non-200 so it goes straight to .catch with a useful message
+    if(!r.ok){
+      var msg=r.status===429?'Rate limited — try again in a moment':
+              r.status===500?'Not accessible — likely bot/crawler protection':
+              r.status===404?'Page not found (404)':
+              r.status===403?'Access blocked (403)':
+              'HTTP '+r.status;
+      throw new Error(msg);
+    }
     return r.json();
   })
   .then(function(d){
-    // Store full raw response for debugging
     S.cwvLastRaw=d;
 
-    // Check for Google API error
-    if(d.error){
-      S.cwvData[url]={error:'Google API: '+d.error.code+' — '+d.error.message};
+    // Check for Google API-level error
+    if(!d||d.error){
+      S.cwvData[url]={error:d&&d.error?'Google API: '+d.error.code+' — '+d.error.message:'Empty response'};
       cb();return;
     }
 
-    var result={url:url,hasFieldData:false,rawKeys:Object.keys(d).join(',')};
+    var result={url:url,hasFieldData:false};
 
-    // 1. Page-level field data (CrUX)
+    // 1. Page-level CrUX field data
     var lx=d.loadingExperience;
     if(lx&&lx.metrics&&lx.overall_category&&lx.overall_category!=='NONE'){
       var m=lx.metrics;
@@ -1747,7 +1752,7 @@ function _fetchCWV(url,cb){
       result.fieldDataSource='page';
     }
 
-    // 2. Origin-level field data (whole domain)
+    // 2. Origin-level CrUX (whole domain fallback)
     if(!result.hasFieldData){
       var ox=d.originLoadingExperience;
       if(ox&&ox.metrics&&ox.overall_category&&ox.overall_category!=='NONE'){
@@ -1762,25 +1767,22 @@ function _fetchCWV(url,cb){
       }
     }
 
-    // 3. Lighthouse lab data (synthetic run — always present)
+    // 3. Lighthouse lab data (synthetic — always present)
     var lr=d.lighthouseResult;
     if(lr){
       var cats=lr.categories||{};
-      var perf=cats.performance||cats['performance']||null;
+      var perf=cats.performance||null;
       if(perf&&perf.score!=null)result.score=perf.score;
-
       var audits=lr.audits||{};
       if(result.lcp==null&&audits['largest-contentful-paint'])  result.lcp =audits['largest-contentful-paint'].numericValue||null;
       if(result.cls==null&&audits['cumulative-layout-shift'])   result.cls =audits['cumulative-layout-shift'].numericValue||null;
       if(result.inp==null&&audits['total-blocking-time'])       result.inp =audits['total-blocking-time'].numericValue||null;
       if(result.fcp==null&&audits['first-contentful-paint'])    result.fcp =audits['first-contentful-paint'].numericValue||null;
       if(result.ttfb==null&&audits['server-response-time'])     result.ttfb=audits['server-response-time'].numericValue||null;
-      result.hasLighthouse=true;
     }
 
-    // Show raw keys if still no data (debugging)
     if(result.score==null&&result.lcp==null&&result.fcp==null){
-      S.cwvData[url]={error:'No metrics in response. Keys: '+result.rawKeys+(lr?'' :' — no lighthouseResult')};
+      S.cwvData[url]={error:'No data — page may not have enough traffic for field data'};
     } else {
       S.cwvData[url]=result;
     }
@@ -1788,10 +1790,12 @@ function _fetchCWV(url,cb){
   })
   .catch(function(e){
     var msg=e.message||'';
-    var friendly=msg.includes('500')?'Not accessible — likely bot/crawler protection':
-                 msg.includes('404')?'Page not found (404)':
-                 msg.includes('403')?'Access blocked (403)':
-                 msg.includes('Failed to fetch')||msg.includes('NetworkError')?'Network error — check your connection':
+    var friendly=msg.includes('Rate limited')?msg:
+                 msg.includes('Not accessible')?msg:
+                 msg.includes('not found')?msg:
+                 msg.includes('blocked')?msg:
+                 msg.includes('Failed to fetch')||msg.includes('NetworkError')||msg.includes('Network')?'Network error — check your connection':
+                 msg.includes('HTTP')?msg:
                  'Request failed: '+msg;
     S.cwvData[url]={error:friendly};
     cb();
