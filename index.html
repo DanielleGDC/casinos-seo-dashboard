@@ -1565,7 +1565,7 @@ function _tabCWVInner(){
     html+='<div style="font-size:36px;margin-bottom:10px">\u26a1</div>';
     html+='<div style="font-size:13px;color:#888;margin-bottom:6px">No CWV data yet for '+esc(mktLabel)+'</div>';
     html+='<div style="font-size:11px;color:#555;line-height:1.7;margin-bottom:16px">Click <strong style="color:#F0F0F0">Check pages</strong> to run PageSpeed Insights on your top pages for this market.</div>';
-    html+='<div style="font-size:10px;color:#444">Will check '+candidates.length+' pages \u00b7 ~'+(candidates.length*3)+'-'+(candidates.length*5)+'s</div>';
+    html+='<div style="font-size:10px;color:#444">Will check '+candidates.length+' pages \u00b7 ~'+(Math.round(candidates.length*2.5/60))+' min \u00b7 2.5s between requests to avoid rate limits</div>';
     html+='</div>';
   }
 
@@ -1691,21 +1691,30 @@ window.runCWVSingle=function(){
   });
 };
 
-function _checkCWVQueue(urls,idx){
+function _checkCWVQueue(urls,idx,retryCount){
   if(idx>=urls.length){
     S.cwvRunning=false;
     tabCWV();
     return;
   }
+  retryCount=retryCount||0;
   var url=urls[idx];
   var prog=$('cwvProgress');
-  if(prog)prog.textContent='Checking '+(idx+1)+' of '+urls.length+': '+url.replace('https://www.casinos.com','');
+  if(prog)prog.textContent='Checking '+(idx+1)+' of '+urls.length+': '+url.replace('https://www.casinos.com','')+(retryCount?' (retry '+retryCount+')':'');
   S.cwvData[url]={loading:true};
 
   _fetchCWV(url,function(){
+    var result=S.cwvData[url];
+    // Retry on rate limit (up to 2 times with increasing delay)
+    if(result&&result.error&&result.error.includes('Rate limited')&&retryCount<2){
+      var retryDelay=3000*(retryCount+1); // 3s, then 6s
+      if(prog)prog.textContent='Rate limited \u2014 waiting '+retryDelay/1000+'s before retry '+(retryCount+1)+' of 2\u2026';
+      setTimeout(function(){_checkCWVQueue(urls,idx,retryCount+1);},retryDelay);
+      return;
+    }
     tabCWV();
-    // 1.2s delay between requests — avoid rate limiting without API key
-    setTimeout(function(){_checkCWVQueue(urls,idx+1);},1200);
+    // 2.5s between requests to stay within API rate limits
+    setTimeout(function(){_checkCWVQueue(urls,idx+1,0);},2500);
   });
 }
 
