@@ -163,10 +163,17 @@ var PT_BRANDS='duckyluck,betmgm,betrivers,fanduel,draftkings,caesars,borgata,gol
 var PT_PAYMENTS='paypal,ach,google-pay,apple-pay,venmo,cash-app,visa,mastercard,american-express,amex,discover,skrill,neteller,paysafecard,prepaid,bitcoin,crypto,zelle,prizeout,gigadat'.split(',');
 var PT_BOFU='bonus,no-deposit,free-spins,deposit,cashback,no-wagering,minimum-deposit,apps,live-dealer,slots,blackjack,roulette,poker,baccarat,promo,promotion'.split(',');
 // US negative review pages — excluded from AI analysis focus (still shown in tables)
-var US_BLACKLIST='yabby-casino,slots-lv,slotslv,sloto-cash,slotocash,shazam-casino,ruby-slots,royal-ace-casino,red-dog-casino,raging-bull-casino,platinum-reels,planet-7-casino,miami-club-casino,mbit-casino,lucky-legends-casino,lucky-creek-casino,kats-casino,jumba-bet,extreme-casino,duckyluck-casino,croco-casino,cool-cat-casino,club-player-casino,brango-casino,bovada-casino,bonus-blitz-casino,black-lotus-casino,big-dollar-casino,adrenaline-casino'.split(',');
-function isBlacklisted(url){
-  var s=(url||'').toLowerCase();
-  return US_BLACKLIST.some(function(b){return s.indexOf(b)>=0;});
+var US_BLACKLIST='yabby-casino,slots-lv,slotslv,sloto-cash,slotocash,shazam-casino,ruby-slots,royal-ace-casino,red-dog-casino,raging-bull-casino,raging-bull,platinum-reels,planet-7-casino,planet7,miami-club-casino,mbit-casino,lucky-legends-casino,lucky-creek-casino,kats-casino,jumba-bet,extreme-casino,duckyluck-casino,duckyluck,croco-casino,cool-cat-casino,club-player-casino,brango-casino,bovada-casino,bonus-blitz-casino,black-lotus-casino,big-dollar-casino,adrenaline-casino'.split(',');
+// Also match against plain text (for query keys like "play croco casino")
+var US_BLACKLIST_NAMES='yabby,slotocash,slots.lv,shazam casino,ruby slots,royal ace,red dog,raging bull,platinum reels,planet 7,miami club,mbit,lucky legends,lucky creek,kats casino,jumba bet,extreme casino,duckyluck,croco casino,cool cat,club player,brango,bovada,bonus blitz,black lotus,big dollar,adrenaline casino'.split(',');
+function isBlacklisted(urlOrText){
+  var s=(urlOrText||'').toLowerCase().replace(/-/g,' ');
+  // Check URL slugs
+  var slug2=(urlOrText||'').toLowerCase();
+  if(US_BLACKLIST.some(function(b){return slug2.indexOf(b)>=0;}))return true;
+  // Check plain name matches (for query text)
+  if(US_BLACKLIST_NAMES.some(function(b){return s.indexOf(b)>=0;}))return true;
+  return false;
 }
 function getPageType(url){
   var s=slug(url).toLowerCase();
@@ -1704,6 +1711,9 @@ window.runTA=function(){
     .sort(function(a,b){return b.li-a.li;}).slice(0,15);
   var statePages=cleanPages.filter(function(p){return getPageType(p.key)==='state';})
     .sort(function(a,b){return b.li-a.li;}).slice(0,8);
+  // Legitimate brand pages (casino type, NOT blacklisted)
+  var legitBrands=cleanPages.filter(function(p){return getPageType(p.key)==='casino';})
+    .sort(function(a,b){return b.li-a.li;}).slice(0,8);
 
   // Top pages by impressions (non-blacklisted)
   var tp=cleanPages.slice().sort(function(a,b){return b.li-a.li;}).slice(0,12);
@@ -1729,18 +1739,19 @@ window.runTA=function(){
   var tv=0,tk=0,tvp=0,tkp=0;
   ga4MoneyUS.forEach(function(r){tv+=r.views;tk+=r.keyEvents;tvp+=r.viewsPrev||0;tkp+=r.keyEventsPrev||0;});
 
-  // Build prompt — US has enhanced structure
   var prompt='You are a senior SEO analyst for casinos.com. Generate sharp, data-driven takeaways for the '+mktLabel+' market.\n\n'
-    +'MARKET: '+mktLabel+' ONLY — every insight must reference specific '+mktLabel+' pages, queries or data points below.\n'
+    +'MARKET: '+mktLabel+' ONLY.\n'
     +'PERIOD: '+dr+(hasCmp?' vs previous period':'')+'\n\n'
     +'GSC OVERVIEW: Clicks: '+pc.toLocaleString()+'\u2192'+lc.toLocaleString()+' ('+pct(lc,pc)+'%) | Impressions: '+pi.toLocaleString()+'\u2192'+li.toLocaleString()+' ('+pct(li,pi)+'%)\n\n';
 
   if(isUS){
-    // US: lead with BOFU, then state pages
-    prompt+='=== US BOFU PAGES (highest priority — these drive revenue) ===\n'
-      +(bofuPages.length?bofuPages.map(function(p){return slug(p.key)+'|'+p.pc+'\u2192'+p.lc+'cl|'+p.pp.toFixed(1)+'\u2192'+p.lp.toFixed(1)+'pos|'+p.li+'impr|ctr:'+p.lctr;}).join('\n'):'no BOFU pages found')
-      +'\n\n=== US STATE PAGES ===\n'
-      +(statePages.length?statePages.map(function(p){return slug(p.key)+'|'+p.pc+'\u2192'+p.lc+'cl|'+p.pp.toFixed(1)+'\u2192'+p.lp.toFixed(1)+'pos|'+p.li+'impr;'}).join('\n'):'none')
+    prompt+='=== PRIMARY DATA (use ONLY this data for Executive Summary, What Is Working, Concerns, Immediate Action Items, Things To Investigate, Keyword Opportunities) ===\n\n'
+      +'BOFU PAGES — HIGHEST PRIORITY (revenue drivers):\n'
+      +(bofuPages.length?bofuPages.map(function(p){return slug(p.key)+'|'+p.pc+'\u2192'+p.lc+'cl|'+p.pp.toFixed(1)+'\u2192'+p.lp.toFixed(1)+'pos|'+p.li+'impr|ctr:'+p.lctr;}).join('\n'):'none found')
+      +'\n\nSTATE PAGES:\n'
+      +(statePages.length?statePages.map(function(p){return slug(p.key)+'|'+p.pc+'\u2192'+p.lc+'cl|'+p.pp.toFixed(1)+'\u2192'+p.lp.toFixed(1)+'pos|'+p.li+'impr';}).join('\n'):'none found')
+      +'\n\nLEGITIMATE BRAND PAGES:\n'
+      +(legitBrands.length?legitBrands.map(function(p){return slug(p.key)+'|'+p.pc+'\u2192'+p.lc+'cl|pos:'+p.lp.toFixed(1);}).join('\n'):'none found')
       +'\n\n';
   } else {
     prompt+='TOP PAGES BY IMPRESSIONS:\n'
@@ -1754,7 +1765,7 @@ window.runTA=function(){
     +(lowCTR.length?'LOW CTR ON PAGE 1-5:\n'+lowCTR.map(function(q){return'"'+q.key+'" pos:'+q.lp.toFixed(1)+' impr:'+q.li+' ctr:'+q.lctr;}).join('\n')+'\n\n':'');
 
   if(ga4MoneyUS.length){
-    prompt+=(isUS?'=== GA4 TOP 10 US MONEY PAGES (BOFU + State, by exit click goals) ===\n':'GA4 MONEY PAGES:\n')
+    prompt+=(isUS?'GA4 TOP 10 US PAGES (BOFU + State, by exit click goals):\n':'GA4 MONEY PAGES:\n')
       +'Total: '+tv.toLocaleString()+'v vs '+tvp.toLocaleString()+'v | '+tk+'ke vs '+tkp+'ke\n'
       +ga4MoneyUS.map(function(r){
         var cv=r.views>0?(r.keyEvents/r.views*100).toFixed(1):0;
@@ -1768,21 +1779,27 @@ window.runTA=function(){
   if(op.length) prompt+='KEYWORD OPPORTUNITIES (pos 10-20, 100+ impr, CTR<3%):\n'+op.map(function(q){return'"'+q.key+'" pos:'+q.lp.toFixed(1)+' impr:'+q.li+' page:'+slug(q.page||'');}).join('\n')+'\n\n';
 
   if(isUS&&blacklistedPages.length){
-    prompt+='=== NEGATIVE REVIEW PAGES (blacklisted casinos — for context only, do NOT include in action items) ===\n'
-      +'These are negative/rogue casino review pages. Note their traffic trends only if significant.\n'
-      +blacklistedPages.slice(0,10).map(function(p){return slug(p.key)+'|'+p.pc+'\u2192'+p.lc+'cl|pos:'+p.lp.toFixed(1);}).join('\n')+'\n\n';
+    prompt+='=== BLACKLISTED/NEGATIVE REVIEW CASINOS — SEPARATE SECTION ONLY ===\n'
+      +'CRITICAL RULE: The following 27 brands are rogue/blacklisted casinos on negative review pages.\n'
+      +'They must NEVER appear in Executive Summary, What Is Working, Concerns, Immediate Action Items, Things To Investigate, or Keyword Opportunities.\n'
+      +'They must ONLY appear in the "## Negative Review Pages" section at the very end.\n'
+      +blacklistedPages.slice(0,15).map(function(p){return slug(p.key)+'|'+p.pc+'\u2192'+p.lc+'cl|pos:'+p.lp.toFixed(1);}).join('\n')+'\n\n';
   }
 
-  prompt+='INSTRUCTIONS: '+(isUS?'Focus 80% of your analysis on BOFU and State pages — these are the revenue drivers. Negative review pages should only appear in a separate dedicated section if their traffic trends are notable. ':'')
-    +'Be specific — name actual pages and queries. No generic advice.\n\n'
+  prompt+='STRICT INSTRUCTIONS:\n'
+    +(isUS?'1. Sections 1-6 below must contain ONLY BOFU, State, and legitimate brand pages. Zero exceptions.\n'
+      +'2. If a blacklisted casino name appears in a query (e.g. "play duckyluck casino"), do NOT include that query in Keyword Opportunities.\n'
+      +'3. The Negative Review Pages section is the ONLY place blacklisted brands may appear.\n'
+      +'4. Focus 80% of analysis on BOFU pages — these drive revenue.\n':'')
+    +'Be specific — name actual pages and data. No generic advice.\n\n'
     +'Reply with EXACTLY these sections:\n'
     +'## Executive Summary\n[3 sentences — key numbers for '+mktLabel+']\n\n'
-    +'## What Is Working\n- [specific page + data]\n\n'
-    +'## Concerns\n- [specific page + data]\n\n'
-    +'## Immediate Action Items\n1. [specific page: exact action]\n2.\n3.\n4.\n\n'
-    +'## Things To Investigate\n- [anomaly with data]\n\n'
-    +'## Keyword Opportunities\n- [specific query: why + action]'
-    +(isUS?'\n\n## Negative Review Pages\n[Only include if traffic trends are notable. Otherwise write "No significant changes."]':'');
+    +'## What Is Working\n- [specific BOFU/State page + data]\n\n'
+    +'## Concerns\n- [specific BOFU/State page + data — NO blacklisted casinos]\n\n'
+    +'## Immediate Action Items\n1. [BOFU/State page: exact action]\n2.\n3.\n4.\n\n'
+    +'## Things To Investigate\n- [anomaly with data — NO blacklisted casinos]\n\n'
+    +'## Keyword Opportunities\n- [specific query — NO blacklisted casino brand queries]'
+    +(isUS?'\n\n## Negative Review Pages\n[Traffic trends for the 27 blacklisted/rogue casinos. Note significant changes only. If stable, write "No significant changes in blacklisted casino traffic."]':'');
 
   fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1400,messages:[{role:'user',content:prompt}]})})
   .then(function(r){return r.json();}).then(function(d){S.ta=d.content&&d.content.length>0?d.content.map(function(c){return c.text||'';}).join(''):(d.error?'API Error: '+JSON.stringify(d.error):'No response \u2014 check ANTHROPIC_API_KEY.');showTA();}).catch(function(e){S.ta='Error: '+e.message;showTA();});
